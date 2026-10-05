@@ -102,6 +102,7 @@ export { default as IconComment } from '@/assets/icons/comment.svg';
 export { default as IconDot } from '@/assets/icons/dot.svg';
 export { default as IconDownload } from '@/assets/icons/download.svg';
 export { default as IconDragHandle } from '@/assets/icons/drag-handle.svg';
+export { default as IconExclamation } from '@/assets/icons/exclamation.svg';
 export { default as IconEdit } from '@/assets/icons/edit.svg';
 export { default as IconError } from '@/assets/icons/error.svg';
 export { default as IconExternal } from '@/assets/icons/external.svg';

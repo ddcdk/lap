@@ -210,13 +210,14 @@
 
 <script setup lang="ts">
 
+import { isOriginalUnavailable, setAlbumAccessibility, resetFileAccessibility } from '@/common/availability';
 import { ref, watch, computed, onMounted, onUnmounted, reactive } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { emit, listen } from '@tauri-apps/api/event';
 import { useI18n } from 'vue-i18n';
 import { useToast } from '@/common/toast';
 import { useUIStore } from '@/stores/uiStore';
-import { config } from '@/common/config';
+import { config, libConfig } from '@/common/config';
 import { isWin, isMac, isLinux, setTheme, getSlideShowInterval, SCALE_VALUES } from '@/common/utils';
 import { matchesShortcut, ShortcutActionId, ShortcutPlatform, VIEW_BACKGROUND_SHORTCUTS } from '@/common/shortcuts';
 import {
@@ -327,6 +328,7 @@ const collectionFileIds = ref<number[]>([]);
 
 let unlistenImg: () => void;
 let unlistenGridView: () => void;
+let unlistenAlbumAccessChanged: (() => void) | null = null;
 let unlistenFilesDeleted: (() => void) | null = null;
 
 const activeFileInfo = computed(() => {
@@ -400,6 +402,22 @@ onMounted(async() => {
   rightIsZoomFit.value = true;
   activePane.value = 'left';
   isFullScreen.value = !!config.imageViewer?.isFullScreen;
+
+  unlistenAlbumAccessChanged = await listen('album-accessibility-changed', async (event: any) => {
+    const { albumId, rootPath, available, libraryId } = event.payload || {};
+    if (libraryId !== libConfig._libraryId) return;
+    setAlbumAccessibility(albumId, available);
+    resetFileAccessibility(rootPath);
+    await Promise.all(getAvailablePanes().map(async pane => {
+      const file = getFileInfoByPane(pane);
+      if (!file || Number(file.album_id) !== Number(albumId)) return;
+      const updated = await getFileInfo(file.id);
+      if (libraryId !== libConfig._libraryId || getFileInfoByPane(pane)?.id !== file.id) return;
+      if (pane === 'left') fileInfo.value = updated;
+      else if (pane === 'right') rightFileInfo.value = updated;
+      else extraPaneState[pane].fileInfo = updated;
+    }));
+  });
 
   // Listen 
   unlistenImg = await listen('update-img', async (event: any) => {
@@ -580,6 +598,7 @@ onUnmounted(() => {
   unlistenImg();
   unlistenGridView();
   if (unlistenFilesDeleted) unlistenFilesDeleted();
+  unlistenAlbumAccessChanged?.();
 });
 
 // Handle keyboard shortcuts
@@ -1004,7 +1023,7 @@ function scheduleNextSlide() {
   if (!isSlideShow.value) return;
 
   // If current file is video, don't set timer - video's ended event will trigger next
-  if (isCurrentFileVideo()) {
+  if (isCurrentFileVideo() && !isOriginalUnavailable(fileInfo.value)) {
     return;
   }
 
@@ -1013,6 +1032,10 @@ function scheduleNextSlide() {
     advanceSlideShow();
   }, interval);
 }
+
+watch(() => isOriginalUnavailable(fileInfo.value), () => {
+  if (isSlideShow.value) scheduleNextSlide();
+});
 
 function startSlideShow() {
   scheduleNextSlide();

@@ -179,10 +179,13 @@
                 >.{{ renamingExt }}</span>
               </div>
               <span v-else
-                class="text-[12px] font-medium text-base-content/80 break-all flex-1 min-w-0"
+                class="flex items-center gap-1 text-[12px] font-medium text-base-content/80 flex-1 min-w-0"
                 :class="{ 'cursor-text': isPrimaryGeneralInfo }"
                 @dblclick.stop="isPrimaryGeneralInfo && startRename()"
-              >{{ generalFileInfo?.name }}</span>
+              >
+                <span class="min-w-0 break-all">{{ generalFileInfo?.name }}</span>
+                <IconExclamation v-if="isOriginalUnavailable(generalFileInfo)" class="h-3.5 w-3.5 shrink-0 text-warning/70" :aria-label="t('offline.original_unavailable')" />
+              </span>
             </div>
 
             <!-- Path -->
@@ -457,6 +460,7 @@ import { useToast } from '@/common/toast';
 import { useUIStore } from '@/stores/uiStore';
 import { config, libConfig } from '@/common/config';
 import { isWebViewVideoPlaybackDisabled, getGStreamerAvailability } from '@/common/video';
+import { isOriginalUnavailable } from '@/common/availability';
 import { getTagsForFile, renameFile, editImage, getAlbum, getFileCollections, getFileInfo, getMotionPhotoVideoPath, revealPath, getFacesForFile, getPersonThumbnail } from '@/common/api';
 import { 
   extractFileName, 
@@ -480,6 +484,7 @@ import {
   IconClose,
   IconRight,
   IconFile,
+  IconExclamation,
   IconFolder,
   IconPhoto,
   IconRotate,
@@ -772,7 +777,7 @@ function toggleMapPanel() {
 }
 
 const quickSave = async (): Promise<boolean> => {
-  if (!props.fileInfo) return false;
+  if (!props.fileInfo || isOriginalUnavailable(props.fileInfo)) return false;
   if (uiStore.activeAdjustments.filePath !== props.fileInfo.file_path) return true;
 
   const adj = uiStore.activeAdjustments as any;
@@ -834,7 +839,7 @@ const generalFolderBreadcrumbs = computed(() => {
   return buildFolderBreadcrumbs(folderPath, albumRootPath.value);
 });
 function revealFileInFolder() {
-  if (props.fileInfo?.file_path) {
+  if (props.fileInfo?.file_path && !isOriginalUnavailable(props.fileInfo)) {
     revealPath(props.fileInfo.file_path);
   }
 }
@@ -873,6 +878,7 @@ watch(
 );
 
 const startRename = () => {
+  if (isOriginalUnavailable(props.fileInfo)) return;
   if (!props.fileInfo) return;
   
   const { name, ext } = extractFileName(props.fileInfo.name);

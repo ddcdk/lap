@@ -132,6 +132,9 @@ async fn main() {
                 if let Err(e) = t_utils::restore_album_scopes(&_app.handle()) {
                     eprintln!("Failed to restore asset scopes: {}", e);
                 }
+                if let Ok(mut albums) = t_sqlite::Album::get_all_albums() {
+                    t_utils::refresh_all_album_accessibility(&mut albums);
+                }
             }
 
             // Initialize AI Engine
@@ -357,6 +360,7 @@ async fn main() {
             t_cmds::prepare_motion_photo_video,
             t_cmds::add_file_to_db,
             t_cmds::check_file_exists,
+            t_cmds::check_file_accessibility,
             t_cmds::set_file_rotate,
             t_cmds::get_file_has_tags,
             // favorite

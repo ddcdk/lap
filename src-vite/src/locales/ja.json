@@ -224,6 +224,10 @@
       }
     }
   },
+  "offline": {
+    "original_unavailable": "元のファイルにアクセスできません",
+    "requires_original": "元のファイルが必要です。ストレージデバイスを再接続してください。"
+  },
   "import_organize": {
     "section_folders": "フォルダーを選択",
     "section_status": "インポート状況",

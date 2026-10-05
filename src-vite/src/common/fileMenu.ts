@@ -1,3 +1,4 @@
+import { isOriginalUnavailable, requiresOriginalAction } from '@/common/availability';
 import { computed, markRaw, Ref } from 'vue';
 import { config, libConfig } from '@/common/config';
 import { SIDEBAR } from '@/common/constants';
@@ -46,9 +47,13 @@ export const useFileMenuItems = (
     selectMode?: Ref<boolean>;
     selectionMediaKind?: Ref<'image' | 'video' | 'mixed' | 'empty'>;
     selectionCount?: Ref<number>;
+    selectionHasUnavailable?: Ref<boolean>;
   }
 ) => {
-  const createAction = (actionName: string) => () => onAction(actionName);
+  const createAction = (actionName: string) => Object.assign(() => {
+    if (requiresOriginalAction(actionName) && (options?.selectMode?.value ? options?.selectionHasUnavailable?.value : isOriginalUnavailable(file.value))) return;
+    onAction(actionName);
+  }, { actionName });
   const shortcut = (actionId: ShortcutActionId) => getShortcutLabel(actionId, DEFAULT_PLATFORM);
 
   // Resolves a label string against the current locale, or returns the fallback if none was found.
@@ -81,6 +86,7 @@ export const useFileMenuItems = (
     const kind = options?.selectionMediaKind?.value ?? 'empty';
     const externalAppKind = kind === 'image' || kind === 'video' ? kind : undefined;
     const selectionCount = options?.selectionCount?.value ?? 0;
+    const unavailable = options?.selectionHasUnavailable?.value === true;
     return [
       {
         label: String(localeMsg.value.menu.file.compare_selected_images || 'Compare selected images'),
@@ -91,16 +97,16 @@ export const useFileMenuItems = (
       {
         label: String(localeMsg.value.menu.file.create_montage || 'Create montage'),
         icon: markRaw(IconCollage),
-        disabled: selectionCount < 2,
+        disabled: unavailable || selectionCount < 2,
         action: createAction('create-montage'),
       },
       // A mixed image+video selection has no single external-app target, so
       // disable the entry rather than showing an empty app list.
-      { ...externalAppMenu(externalAppKind), disabled: kind === 'mixed' },
+      { ...externalAppMenu(externalAppKind), disabled: unavailable || kind === 'mixed' },
       {
         label: localeMsg.value.menu.file.refresh_file_info,
         icon: markRaw(IconRefresh),
-        disabled: selectionCount === 0,
+        disabled: unavailable || selectionCount === 0,
         action: createAction('refresh-file-info'),
       },
     ];
@@ -119,7 +125,8 @@ export const useFileMenuItems = (
       && albumId > 0;
     const canSetDesktopWallpaper = f.file_type === 1
       || (f.file_type === 3 && f.media_subtype === 'raw_jpeg_pair' && f.live_photo_video_path);
-    return [
+    const unavailable = isOriginalUnavailable(f);
+    const items: any[] = [
       {
         label: localeMsg.value.menu.file.view_in_new_window,
         icon: markRaw(IconMonitor),
@@ -330,6 +337,17 @@ export const useFileMenuItems = (
         action: createAction('trash')
       },
     ];
+    const applyAvailability = (item: any): any => {
+      const requiresOriginal = requiresOriginalAction(item.action?.actionName || '')
+        || item.label === menuLabel(OPEN_IN_APP_LABELS.generic)
+        || item.label === translate('menu.file.move_copy');
+      return {
+        ...item,
+        disabled: !!item.disabled || (unavailable && requiresOriginal),
+        children: item.children?.map(applyAvailability),
+      };
+    };
+    return items.map(applyAvailability);
   };
 
   return computed(() => {

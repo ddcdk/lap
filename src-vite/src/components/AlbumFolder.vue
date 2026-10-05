@@ -14,8 +14,8 @@
       :class="{ 'pl-4': child.path !== rootPath }"
     >
       <div v-if="child.id != 0 || selection.folderPath.value == rootPath"
-        :data-file-drop-path="unavailable ? undefined : child.path"
-        :data-file-drop-album-id="unavailable ? undefined : albumId"
+        :data-file-drop-path="unavailable || isFolderUnavailable(child.path) ? undefined : child.path"
+        :data-file-drop-album-id="unavailable || isFolderUnavailable(child.path) ? undefined : albumId"
         :class="folderClass(child)"
         @click="clickFolder(albumId, child)"
         @dblclick="!isFolderFiltering && expandFolder(child)"
@@ -64,6 +64,7 @@
           <div class="overflow-hidden whitespace-pre text-ellipsis">
             {{ child.name }}
           </div>
+          <IconExclamation v-if="unavailable || isFolderUnavailable(child.path)" class="ml-1 size-3 shrink-0 text-warning/70" :aria-label="t('offline.original_unavailable')" />
           <div class="ml-auto flex flex-row items-center text-base-content/30">
             <IconHeartFilled v-if="child.is_favorite" class="mr-1 w-4 h-4 shrink-0 text-primary/70" />
             <span
@@ -72,7 +73,7 @@
             >
               {{ getFolderFileCount(child.path).toLocaleString() }}
             </span>
-            <ContextMenu v-if="allowContextMenu && !unavailable && !isRenamingFolder && !isCreatingFolder"
+            <ContextMenu v-if="allowContextMenu && !isRenamingFolder && !isCreatingFolder"
               v-show="shouldShowFolderMenu(child)"
               :ref="(el: any) => { if (el) folderContextMenus[child.path] = el }"
               :iconMenu="IconMore"
@@ -154,7 +155,7 @@ import { isMac, shortenFilename, isValidFileName, getFolderPath, getFullPath, no
 import {
   createFolder, renameFolder, fetchFolder, getAllAlbums, moveFolder, moveFolderOutsideLibrary,
   copyFolder, checkFileExists, revealPath, deleteFolder, deleteFolderPermanently, recountAlbum, selectFolder as selectFolderInDb,
-  setFolderFavorite, setFolderSearchExcluded, hasImportableClipboard, refreshAlbumSubfolders,
+  isDirectoryAccessible, setFolderFavorite, setFolderSearchExcluded, hasImportableClipboard, refreshAlbumSubfolders,
 } from '@/common/api';
 import { DEFAULT_PLATFORM, getShortcutLabel } from '@/common/shortcuts';
 import { Album, Folder } from '@/common/types';
@@ -165,11 +166,13 @@ import ContextMenu from '@/components/ContextMenu.vue';
 import MoveTo from '@/components/MoveTo.vue';
 import MessageBox from '@/components/MessageBox.vue';
 import FileConflictDialog from '@/components/FileConflictDialog.vue';
+import { isFolderUnavailable, setFolderAccessibility } from '@/common/availability';
 import { useToast } from '@/common/toast';
 import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
 
 import {
   IconRight,
+  IconExclamation,
   IconMore,
   IconNewFolder,
   IconRename,
@@ -247,7 +250,6 @@ const folderClass = (folder: Folder) => {
       : 'hover:text-base-content hover:bg-base-100/30 border-transparent',
     folder.is_excluded_from_search ? 'text-base-content/30! hover:text-base-content/30!' : '',
     matched ? 'text-primary/70' : isFolderFiltering.value && !selected ? 'text-base-content/60' : '',
-    props.unavailable ? 'opacity-45' : '',
   ];
 };
 const shouldShowFilteredChildren = (folder: Folder) =>
@@ -321,7 +323,9 @@ const treeRootRef = ref<HTMLElement | null>(null);
 // more menuitems - function that takes the folder being right-clicked
 const getMenuItemsForFolder = async (folder: any) => {
   const isRoot = folder.path === props.rootPath;
-  const canPaste = await hasImportableClipboard();
+  const canPaste = !props.unavailable && await hasImportableClipboard();
+  const unavailable = props.unavailable || !await isDirectoryAccessible(folder.path);
+  setFolderAccessibility(folder.path, !unavailable);
   return [
     {
       label: folder?.is_favorite ? localeMsg.value.menu.meta.unfavorite : localeMsg.value.menu.meta.favorite,
@@ -336,11 +340,13 @@ const getMenuItemsForFolder = async (folder: any) => {
     },
     {
       label: localeMsg.value.menu.file.new_folder,
+      disabled: unavailable,
       icon: IconNewFolder,
       action: () => { void startNewFolder(folder); }
     },
     {
       label: localeMsg.value.menu.file.rename,
+      disabled: unavailable,
       icon: IconRename,
       action: () => {
         isRenamingFolder.value = true;
@@ -356,7 +362,7 @@ const getMenuItemsForFolder = async (folder: any) => {
       label: t('menu.file.paste'),
       icon: IconClipboard,
       shortcut: getShortcutLabel('file.paste', DEFAULT_PLATFORM),
-      disabled: !canPaste,
+      disabled: unavailable || !canPaste,
       action: () => {
         void tauriEmit('paste-clipboard-to-folder', {
           albumId: props.albumId,
@@ -366,26 +372,26 @@ const getMenuItemsForFolder = async (folder: any) => {
     },
     {
       label: t('menu.file.move_copy'),
-      disabled: isRoot,
+      disabled: unavailable || isRoot,
       children: [
         {
           label: t('menu.file.move_within_library'),
           icon: IconFolderArrowRight,
-          disabled: isRoot,
+          disabled: unavailable || isRoot,
           action: () => {
             showMoveTo.value = true;
           }
         },
         {
           label: t('menu.file.move_to_folder'),
-          disabled: isRoot,
+          disabled: unavailable || isRoot,
           action: () => {
             void clickMoveToFolder();
           }
         },
         {
           label: t('menu.file.copy_to_folder'),
-          disabled: isRoot,
+          disabled: unavailable || isRoot,
           action: () => {
             void clickCopyToFolder();
           }
@@ -394,6 +400,7 @@ const getMenuItemsForFolder = async (folder: any) => {
     },
     {
       label: isMac ? localeMsg.value.menu.file.reveal_in_finder : localeMsg.value.menu.file.reveal_in_file_explorer,
+      disabled: unavailable,
       action: () => {
         revealPath(folder.path);
       }
@@ -405,7 +412,7 @@ const getMenuItemsForFolder = async (folder: any) => {
     {
       label: localeMsg.value.menu.album.refresh_subfolders,
       icon: IconRefresh,
-      disabled: refreshingSubfolderPaths.value.has(folder.path),
+      disabled: unavailable || refreshingSubfolderPaths.value.has(folder.path),
       action: () => { void refreshSubfolders(folder); }
     },
     {
@@ -422,7 +429,7 @@ const getMenuItemsForFolder = async (folder: any) => {
     {
       label: localeMsg.value.menu.album.delete_folder,
       icon: IconTrash,
-      disabled: isRoot,
+      disabled: unavailable || isRoot,
       action: () => {
         deletePermanently.value = permanentDeleteChecked.value;
         showTrashFolderMsgbox.value = true;
@@ -489,7 +496,7 @@ const expandFolder = async (folder: any, forceRefresh = false) => {
   if (!forceRefresh && folder.has_subfolders === false) return;
   folder.is_expanded = forceRefresh ? true : !folder.is_expanded;
 
-  if (folder.is_expanded && (!folder.children || forceRefresh)) {
+  if (!props.unavailable && !isFolderUnavailable(folder.path) && folder.is_expanded && (!folder.children || forceRefresh)) {
     const subFolders = await fetchFolder(folder.path, false, config.settings.folderSort);
     if (subFolders) {
       folder.has_subfolders = subFolders.has_subfolders;
@@ -589,7 +596,7 @@ const handleTreeKeyDown = async (event: { payload: { key: string } }) => {
       break;
     case 'ArrowRight':
       if (currentFolder.has_subfolders === false) break;
-      if (!currentFolder.children || currentFolder.children.length === 0) {
+      if (!props.unavailable && !isFolderUnavailable(currentFolder.path) && (!currentFolder.children || currentFolder.children.length === 0)) {
         const subFolders = await fetchFolder(currentFolder.path, false, config.settings.folderSort);
         if (subFolders) {
           currentFolder.has_subfolders = subFolders.has_subfolders;
@@ -632,6 +639,7 @@ const focusNewFolderInput = async (select = false) => {
 };
 
 const startNewFolder = async (folder: Folder) => {
+  if (props.unavailable || isFolderUnavailable(folder.path)) return;
   if (isCreatingFolder.value) return;
   const refreshed = await fetchFolder(folder.path, false, config.settings.folderSort);
   if (refreshed) {

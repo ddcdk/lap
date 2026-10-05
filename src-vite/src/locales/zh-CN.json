@@ -224,6 +224,10 @@
       }
     }
   },
+  "offline": {
+    "original_unavailable": "原文件暂时无法访问",
+    "requires_original": "需要原文件，请连接存储设备后使用此操作。"
+  },
   "import_organize": {
     "section_folders": "选择文件夹",
     "section_status": "导入状态",

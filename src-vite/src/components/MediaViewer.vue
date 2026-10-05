@@ -359,6 +359,7 @@
           :filePath="file?.file_path"
           :fileId="file?.id"
           :fileType="file?.file_type"
+          :originalUnavailable="originalUnavailable"
           :rawPairPath="file?.media_subtype === 'raw_jpeg_pair' ? file?.live_photo_video_path : ''"
           :fileVersion="file?.modified_at || 0"
           :imageWidth="file?.width"
@@ -384,7 +385,9 @@
 
       <button
         v-if="isLivePhotoLike"
-        class="absolute left-4 bottom-4 z-60 inline-flex h-10 items-center gap-2 rounded-box bg-base-100/70 px-3 text-sm font-medium text-base-content/70 shadow hover:bg-base-100 hover:text-base-content cursor-pointer"
+        class="absolute left-4 bottom-4 z-60 inline-flex h-10 items-center gap-2 rounded-box bg-base-100/70 px-3 text-sm font-medium text-base-content/70 shadow"
+        :class="originalUnavailable ? 'cursor-default opacity-50' : 'hover:bg-base-100 hover:text-base-content cursor-pointer'"
+        :disabled="originalUnavailable"
         @mouseenter="startLivePhotoPreview"
         @mouseleave="isLivePhotoPlaying = false"
         @click.stop
@@ -402,6 +405,9 @@
           ref="mediaRef"
           class="h-full w-full"
           :filePath="file?.file_path"
+          :fileId="file?.id"
+          :thumbnailSrc="file?.thumbnail || ''"
+          :originalUnavailable="originalUnavailable"
           :rotate="file?.rotate ?? 0"
           :isZoomFit="isZoomFit"
           :isSlideShow="isSlideShow"
@@ -441,7 +447,8 @@ import { config, libConfig } from '@/common/config';
 import { useToast } from '@/common/toast';
 import { isWin, isMac, isLinux, getSlideShowInterval } from '@/common/utils';
 import { getShortcutLabel, ShortcutActionId, ShortcutPlatform, VIEW_BACKGROUND_SHORTCUTS } from '@/common/shortcuts';
-import { getMotionPhotoVideoPath } from '@/common/api';
+import { isOriginalUnavailable, setFileAccessibility } from '@/common/availability';
+import { getMotionPhotoVideoPath, checkFileAccessibility } from '@/common/api';
 
 import Image from '@/components/Image.vue';
 import TButton from '@/components/TButton.vue';
@@ -484,6 +491,7 @@ import {
   IconPalette,
   IconVideoPlay,
   IconLivePhoto,
+  IconExclamation,
 } from '@/common/icons';
 import ContextMenu from '@/components/ContextMenu.vue';
 import iconLogo from '@/assets/images/icon.png';
@@ -609,7 +617,7 @@ const livePhotoViewport = ref<Record<string, number | boolean> | null>(null);
 let motionPhotoVideoRequestSeq = 0;
 
 function startLivePhotoPreview() {
-  if (!livePhotoVideoPath.value) return;
+  if (originalUnavailable.value || !livePhotoVideoPath.value) return;
   emit('activate');
   const viewport = mediaRef.value?.getViewportState?.();
   // Preserve the still image's visible region for the Live Photo preview.
@@ -1009,6 +1017,9 @@ const quickViewStatusBadges = computed<StatusBadge[]>(() => {
       icons: metaIcons,
     });
   }
+  if (isOriginalUnavailable(props.file)) {
+    badges.push({ key: 'unavailable', icon: IconExclamation, iconClass: 'text-warning/70' });
+  }
 
   return badges;
 });
@@ -1320,6 +1331,23 @@ defineExpose({
   triggerPrev,
   triggerNext
 });
+
+const originalUnavailable = computed(() => isOriginalUnavailable(props.file));
+watch(originalUnavailable, unavailable => {
+  if (unavailable) isLivePhotoPlaying.value = false;
+});
+let accessRequest = 0;
+async function refreshOriginalAccess() {
+  const path = props.file?.file_path;
+  const request = ++accessRequest;
+  const libraryId = libConfig._libraryId;
+  if (!path) return;
+  try {
+    const available = await checkFileAccessibility(path);
+    if (request === accessRequest && libraryId === libConfig._libraryId) setFileAccessibility(path, available);
+  } catch { /* An IPC failure is not evidence that the original is offline. */ }
+}
+watch(() => [props.file, props.file?.file_path, libConfig._libraryId], refreshOriginalAccess, { immediate: true });
 
 const selectedFile = computed(() => props.file);
 

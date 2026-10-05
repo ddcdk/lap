@@ -224,6 +224,10 @@
       }
     }
   },
+  "offline": {
+    "original_unavailable": "El archivo original no está disponible",
+    "requires_original": "Requiere el archivo original. Vuelve a conectar el dispositivo de almacenamiento."
+  },
   "import_organize": {
     "section_folders": "Seleccionar carpeta",
     "section_status": "Estado de importación",

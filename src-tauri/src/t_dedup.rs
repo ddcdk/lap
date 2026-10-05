@@ -343,6 +343,7 @@ fn get_files_by_sizes(conn: &Connection) -> Result<Vec<AFile>, String> {
                 live_photo_video_id: None,
                 live_photo_video_path: None,
                 motion_photo_offset: None,
+                album_accessible: true,
                 album_visible: true,
             })
         })

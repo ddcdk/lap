@@ -457,6 +457,7 @@
             :file-count="fileList.length"
             :selected-files="selectionPreviewFiles"
             :selected-count="selectedCount"
+            :originals-unavailable="selectionHasUnavailable"
             :selected-size="selectedSize"
             :query-source="currentQuerySource"
             :more-actions="selectionMenuItems"
@@ -464,7 +465,7 @@
             @select-all="selectAllInCurrentList"
             @select-none="selectNoneInCurrentList"
             @select-invert="invertSelectionInCurrentList"
-            @move-within-library="showMoveTo = true"
+            @move-within-library="!currentOriginalsUnavailable() && (showMoveTo = true)"
             @move-to-folder="onMoveToFolder"
             @copy-to-folder="onCopyToFolder"
             @remove-from-collection="removeSelectedFromCollection"
@@ -734,7 +735,7 @@ import { getAlbum, getAllAlbums, recountAlbum, getQueryCountAndSum, getQueryTime
          copyImages, renameFile, moveFile, moveFileOutsideLibrary, copyFile, deleteFile, deleteFilePermanently, batchDeleteFiles, editFileComment, getFileThumb, getFileThumbs, getFileInfo,
          setFileRotate, setFileFavorite, setFileRating, setFileCullingFlag, batchUpdateFileMetadata, getTagsForFile, getTagGroupName, searchSimilarImages, generateEmbedding,
          revealPath, getTagName, indexAlbum, listenIndexProgress, listenIndexFinished, setAlbumCover, setDesktopWallpaper,
-         updateFileInfo, importFile, importUrl, importFileBytes, getDragPayload, importClipboard, addFileToDb, checkFileExists, cancelIndexing as cancelIndexingApi, selectFolder, getFacesForFile, listenFaceIndexProgress,
+         updateFileInfo, importFile, importUrl, importFileBytes, getDragPayload, importClipboard, addFileToDb, checkFileExists, checkFileAccessibility, cancelIndexing as cancelIndexingApi, selectFolder, getFacesForFile, listenFaceIndexProgress,
          openFilesWithApp, getAppConfig, getIndexRecoveryInfo, clearIndexRecoveryInfo, setLastSelectedItemIndex,
          dedupDelete, getQueryFilePosition, getFolderSearchExcluded,
          listCollections, createCollection, addFilesToCollection, removeFilesFromCollection, getFileCollections, getCollectionCountAndSum, getCollectionFiles, getCollectionGroupedQueryRows, getCollectionGroupFileIds, getCollectionQueryFileIds, fetchFolder, isDirectoryAccessible, checkAlbumAccessibility, addTagToFile } from '@/common/api';
@@ -763,6 +764,7 @@ import ProgressBar from '@/components/ProgressBar.vue';
 import GridView  from '@/components/GridView.vue';
 import PhotoMapView from '@/components/PhotoMapView.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
+import { isOriginalUnavailable, setFileAccessibility, setFolderAccessibility, requiresOriginalAction } from '@/common/availability';
 import { useFileMenuItems } from '@/common/fileMenu';
 import Welcome from '@/components/Welcome.vue';
 import MediaViewer from '@/components/MediaViewer.vue';
@@ -1115,6 +1117,34 @@ async function finishSelectedFileRefresh() {
   await updateContent(true, true);
 }
 
+const selectionAccessFiles = ref<any[]>([]);
+const selectionAccessPending = ref(false);
+const selectionHasUnavailable = computed(() => selectionAccessPending.value
+  || selectionAccessFiles.value.some(isOriginalUnavailable)
+  || getActionableSelectedItems().some(isOriginalUnavailable));
+let selectionAccessRequest = 0;
+let selectionAccessTimer: ReturnType<typeof setTimeout> | null = null;
+watch([selectMode, selectedFilesVersion, () => libConfig._libraryId], () => {
+  const request = ++selectionAccessRequest;
+  if (selectionAccessTimer) clearTimeout(selectionAccessTimer);
+  selectionAccessFiles.value = [];
+  const ids = Array.from(selectedFileIds);
+  selectionAccessPending.value = selectMode.value && ids.length > getActionableSelectedItems().length;
+  if (!selectionAccessPending.value) return;
+  const libraryId = libConfig._libraryId;
+  selectionAccessTimer = setTimeout(async () => {
+    const states: any[] = [];
+    for (let i = 0; i < ids.length; i += 500) {
+      const files = await getFilesByIds(ids.slice(i, i + 500));
+      if (request !== selectionAccessRequest || libraryId !== libConfig._libraryId) return;
+      if (!files || files.length !== Math.min(500, ids.length - i)) return;
+      for (const file of files) states.push({ album_id: file.album_id, album_accessible: file.album_accessible, file_path: file.file_path });
+    }
+    selectionAccessFiles.value = states;
+    selectionAccessPending.value = false;
+  }, 100);
+});
+
 const selectionMenuItems = useFileMenuItems(
   ref<any>(null),
   localeMsg,
@@ -1126,6 +1156,7 @@ const selectionMenuItems = useFileMenuItems(
     selectMode: ref(true),
     selectionMediaKind,
     selectionCount: selectedCount,
+    selectionHasUnavailable,
   },
 );
 
@@ -2264,6 +2295,7 @@ async function removeSelectedFromCollection() {
 }
 
 const openTrashMsgbox = (reclaimBytes = 0, groupKey = '', fileIds: number[] = []) => {
+  if (fileIds.length === 0 && currentOriginalsUnavailable()) return;
   if (selectMode.value && selectedCount.value === 0 && fileIds.length === 0) return;
   dedupReclaimBytes.value = Math.max(0, reclaimBytes);
   dedupTrashGroupKey.value = groupKey || '';
@@ -3042,6 +3074,8 @@ async function clearContentInternalDrag(event?: PointerEvent) {
       return;
     }
 
+    // Collection drops only change the catalog; filesystem drops need every original.
+    if (!await requireOriginalFiles(files)) return;
     if (!await confirmLargeBatch(files.length)) return;
 
     const destPath = String(target.dataset.fileDropPath || '');
@@ -3484,6 +3518,7 @@ const currentTitleIcon = computed(() => {
 
 const backupState = ref<any>(null);
 
+let unlistenAlbumAccessChanged: (() => void) | undefined;
 let unlistenKeydown: () => void;
 let unlistenImageViewer: () => void;
 let unlistenImageEditor: (() => void) | null = null;
@@ -3555,6 +3590,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  selectionAccessRequest++;
+  if (selectionAccessTimer) clearTimeout(selectionAccessTimer);
   stopSlideShow();
   clearRightPanelAnimationTimer();
   if (contentUpdateTimer) {
@@ -3951,7 +3988,41 @@ async function handleTimelineSelectItem(index: number) {
   });
 }
 
+function currentOriginalsUnavailable() {
+  if (selectMode.value && selectionHasUnavailable.value) return true;
+  const files = selectMode.value ? getActionableSelectedItems() : [fileList.value[selectedItemIndex.value]];
+  return files.some(isOriginalUnavailable);
+}
+async function requireOriginalFiles(files: any[]) {
+  if (files.some(isOriginalUnavailable)) {
+    toast.warning(t('offline.requires_original'));
+    return false;
+  }
+  const libraryId = libConfig._libraryId;
+  for (let i = 0; i < files.length; i += 8) {
+    const results = await Promise.all(files.slice(i, i + 8).map(async file => {
+      if (!file?.file_path) return false;
+      try {
+        const available = await checkFileAccessibility(file.file_path);
+        if (libraryId === libConfig._libraryId) setFileAccessibility(file.file_path, available);
+        return available;
+      } catch { return false; }
+    }));
+    if (libraryId !== libConfig._libraryId) return false;
+    if (results.some(available => !available)) {
+      toast.warning(t('offline.requires_original'));
+      return false;
+    }
+  }
+  return true;
+}
+async function requireCurrentOriginals() {
+  const files = selectMode.value ? await getActionableSelectedItemsForAction() : [fileList.value[selectedItemIndex.value]].filter(Boolean);
+  return !!files?.length && await requireOriginalFiles(files);
+}
+
 function clickRename() {
+  if (currentOriginalsUnavailable()) return;
   if (selectMode.value) return;
   // Skip while an inline input is active (e.g. FileInfo rename, where Enter confirms the edit).
   if (uiStore.inputStack.length > 0) return;
@@ -3977,7 +4048,7 @@ async function clickSetAlbumCover() {
 
 async function clickSetDesktopWallpaper() {
   const file = fileList.value[selectedItemIndex.value];
-  if (!file?.file_path) return;
+  if (!file?.file_path || !await requireOriginalFiles([file])) return;
   const companionPath = file.media_subtype === 'raw_jpeg_pair'
     ? String(file.live_photo_video_path || '')
     : null;
@@ -3995,6 +4066,7 @@ function handleItemAction(payload: { action: string, index: number }) {
 
   const { action, index } = payload;
   if (index >= 0) selectedItemIndex.value = index; // Panel actions have no thumbnail index.
+  if (currentOriginalsUnavailable() && requiresOriginalAction(action)) return;
 
   if (action.startsWith('rating-')) {
     const rating = Number.parseInt(action.slice('rating-'.length), 10);
@@ -4407,7 +4479,7 @@ function handleLocalKeyDown(event: KeyboardEvent) {
   if (matchesShortcut('file.reveal', event, shortcutPlatform)) {
     event.preventDefault();
     if (selectMode.value && selectedCount.value === 0) return;
-    revealPath(fileList.value[selectedItemIndex.value].file_path);
+    if (!currentOriginalsUnavailable()) revealPath(fileList.value[selectedItemIndex.value].file_path);
     return;
   }
 
@@ -4499,7 +4571,7 @@ function handleLocalKeyDown(event: KeyboardEvent) {
   if (matchesShortcut('file.moveTo', event, shortcutPlatform)) {
     event.preventDefault();
     if (selectMode.value && selectedCount.value === 0) return;
-    showMoveTo.value = true;
+    if (!currentOriginalsUnavailable()) showMoveTo.value = true;
     return;
   }
 
@@ -5218,6 +5290,9 @@ onMounted( async() => {
   window.addEventListener('keydown', handleLocalKeyDown);
   window.addEventListener(PREVIEW_WINDOW_FOCUS_RESTORED, restoreOpenPreviewFocus);
   window.addEventListener('keyup', handleLocalKeyUp);
+  unlistenAlbumAccessChanged = await listen('album-accessibility-changed', (event: any) => {
+    if (event.payload?.libraryId === libConfig._libraryId && !event.payload?.selectionChanged) updateContent(true);
+  });
   unlistenKeydown = await listen('global-keydown', handleKeyDown);
 
   unlistenLibraryTotalRefreshed = await listen('library-total-refreshed', (event: any) => {
@@ -5724,6 +5799,7 @@ onBeforeUnmount(() => {
     clearTimeout(layoutRefreshTimer);
     layoutRefreshTimer = null;
   }
+  unlistenAlbumAccessChanged?.();
   window.removeEventListener('keydown', handleLocalKeyDown);
   window.removeEventListener(PREVIEW_WINDOW_FOCUS_RESTORED, restoreOpenPreviewFocus);
   window.removeEventListener('keyup', handleLocalKeyUp);
@@ -7537,19 +7613,22 @@ async function updateContent(force = false, preserveMultiSelection = selectMode.
             if (album.is_accessible === false) {
               if (requestId !== currentContentRequestId) return;
               isCurrentFolderMissing.value = true;
-              showEmptyContent(requestId);
-              return;
             }
-            getFileList({ searchAllSubfolders: libConfig.album.folderPath }, requestId);
+            getFileList({ searchAllSubfolders: album.path }, requestId);
           } else {                        
             // folder is selected, show files in the folder
             const folderPath = libConfig.album.folderPath || "";
             const folderId = Number(libConfig.album.folderId || 0);
-            if (!folderPath || !(await isDirectoryAccessible(folderPath))) {
+            const folderAccessible = album.is_accessible !== false && !!folderPath && await isDirectoryAccessible(folderPath);
+            if (requestId !== currentContentRequestId) return;
+            setFolderAccessibility(folderPath, folderAccessible);
+            if (!folderAccessible) {
               if (requestId !== currentContentRequestId) return;
               isCurrentFolderMissing.value = true;
               contentTitle.value = formatFolderBreadcrumb(folderPath, album.path);
-              showEmptyContent(requestId);
+              getFileList(config.settings.showSubfolderFiles
+                ? { searchAllSubfolders: folderPath }
+                : { searchFolder: folderPath }, requestId);
               return;
             }
             getFolderSearchExcluded(folderPath).then(excluded => {
@@ -8044,6 +8123,7 @@ const getClipboardFilePaths = (files: any[], limit = 10) => {
 };
 
 const clickCopyImages = async (fallbackFile?: any) => {
+  if (!await requireCurrentOriginals()) return;
   if (isProcessing.value) return;
 
   let copiedCount = 0;
@@ -8114,7 +8194,7 @@ const openInExternalApp = async (appId?: string) => {
   const items = selectMode.value
     ? (selectedCount.value > 0 ? await getActionableSelectedItemsForAction() : [])
     : [fileList.value[selectedItemIndex.value]].filter(Boolean);
-  if (!items || items.length === 0) return;
+  if (!items || items.length === 0 || !await requireOriginalFiles(items)) return;
 
   const kind = getMediaKind(items);
   if (kind === 'empty') return;
@@ -8144,6 +8224,7 @@ const openInExternalApp = async (appId?: string) => {
 }
 
 const onRenameFile = async (newName: string) => {
+  if (!await requireCurrentOriginals()) return;
   if(selectedItemIndex.value >= 0) {
     const file = fileList.value[selectedItemIndex.value];
     const fileName = combineFileName(newName, renamingFileName.value.ext ?? '');
@@ -8214,6 +8295,7 @@ function rebuildSelectionAfterListMutation(selectedIds: Set<number>) {
 }
 
 const onMoveTo = async () => {
+  if (!await requireCurrentOriginals()) return;
   const affectedAlbumIds = new Set<number>();
   const destPath = String(libConfig.destFolder.folderPath || '');
   const destAlbumId = Number(libConfig.destFolder.albumId || 0);
@@ -8379,6 +8461,7 @@ const resolveLibraryDestination = async (destPath: string) => {
 }
 
 const onMoveToFolder = async () => {
+  if (!await requireCurrentOriginals()) return;
   const files = await getFilesForFolderAction();
   if (!files || files.length === 0) return;
 
@@ -8472,6 +8555,7 @@ const onMoveToFolder = async () => {
 }
 
 const onCopyToFolder = async () => {
+  if (!await requireCurrentOriginals()) return;
   const destPath = await selectSystemDestination(t('msgbox.copy_to_folder.title'));
   if (!destPath) return;
 
@@ -8851,6 +8935,11 @@ const onTrashFile = async (retryItemsOverride: any[] = []) => {
     }
   } catch (error) {
     console.error(`Failed to ${permanently ? 'permanently delete' : 'trash'} file(s):`, error);
+    if (String(error).startsWith('original_unavailable:')) {
+      closeTrashMsgbox();
+      toast.warning(t('offline.requires_original'));
+      return;
+    }
     if (!permanently && pendingTrashFailedItems.value.length > 0) {
       if (pendingTrashFailedOtherFailureCount.value > 0) {
         toast.error(
@@ -8918,6 +9007,7 @@ async function refreshGroupedRowsAfterDelete(fileIds: number[]) {
 
 // update the file info from the file
 const updateFile = async (file: any, showToast = false) => {
+  if (!await requireOriginalFiles([file])) return;
   try {
     const updatedFile = await updateFileInfo(file.id, file.file_path);
     if (updatedFile) {
@@ -8978,7 +9068,8 @@ const updateThumbForFile = async (file: any) => {
     file.e_orientation || 0,
     config.settings.thumbnailSize,
     true,
-    getNextVideoThumbnailRefreshPercent(file)
+    getNextVideoThumbnailRefreshPercent(file),
+    file.album_id || 0,
   );
   if (thumb) {
     if (thumb.error_code === 0 || thumb.error_code === 2) {
@@ -9246,7 +9337,7 @@ function scheduleNextSlide() {
   if (!isSlideShow.value) return;
   
   // If current file is video, don't set timer - video's ended event will trigger next
-  if (isCurrentFileVideo()) {
+  if (isCurrentFileVideo() && !isOriginalUnavailable(fileList.value[selectedItemIndex.value])) {
     return;
   }
   
@@ -9256,6 +9347,10 @@ function scheduleNextSlide() {
     advanceSlideShow();
   }, interval);
 }
+
+watch(() => isOriginalUnavailable(fileList.value[selectedItemIndex.value]), () => {
+  if (isSlideShow.value) scheduleNextSlide();
+});
 
 function startSlideShow() {
   scheduleNextSlide();
@@ -10376,6 +10471,7 @@ async function getMontageImageIds() {
 let montageOpening = false;
 
 async function openMontage() {
+  if (!await requireCurrentOriginals()) return;
   // one montage at a time: bring the open one to the front
   if (montageOpening) return;
   const openWindow = await WebviewWindow.getByLabel('montage');
@@ -10443,7 +10539,7 @@ async function createMontageWindow() {
 
 async function openImageEditor(index: number) {
   const file = fileList.value[index];
-  if (!file) return;
+  if (!file || !await requireOriginalFiles([file])) return;
   const fileId = Number(file.id || 0);
   if (fileId <= 0) return;
 
@@ -10503,7 +10599,7 @@ async function waitForPrintImage() {
 
 async function printImage(index: number) {
   const selectedFile = fileList.value[index];
-  if (!selectedFile?.file_path) return;
+  if (!selectedFile?.file_path || !await requireOriginalFiles([selectedFile])) return;
 
   const fileId = Number(selectedFile.id || 0);
   const fileType = Number(selectedFile.file_type || 1);

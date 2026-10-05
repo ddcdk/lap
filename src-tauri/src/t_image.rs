@@ -1747,6 +1747,26 @@ impl FileImageResultCache {
 static FILE_IMAGE_RESULT_CACHE: Lazy<Mutex<FileImageResultCache>> =
     Lazy::new(|| Mutex::new(FileImageResultCache::new()));
 
+/// Read an existing preview without touching an unavailable original or decoding.
+pub fn get_cached_preview_bytes(path: &str, options: RawDisplayOptions) -> Option<Vec<u8>> {
+    if let Ok(cache) = RAW_PREVIEW_CACHE.lock() {
+        if let Some(entry) = cache
+            .iter()
+            .rev()
+            .find(|entry| entry.0 == path && entry.2 == options)
+            .or_else(|| cache.iter().rev().find(|entry| entry.0 == path))
+        {
+            return Some(entry.3 .0.clone());
+        }
+    }
+    FILE_IMAGE_RESULT_CACHE
+        .lock()
+        .ok()?
+        .entries
+        .get(path)
+        .map(|entry| entry.data.clone())
+}
+
 fn get_file_signature(file_path: &str) -> Result<(u64, u128), String> {
     let metadata = fs::metadata(file_path)
         .map_err(|e| format!("Failed to read file metadata for cache: {}", e))?;
@@ -1872,4 +1892,53 @@ pub async fn get_raw_preview_cached(path: &str, options: RawDisplayOptions) -> R
         }
         Ok(result)
     }).await.map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod offline_preview_tests {
+    use super::*;
+
+    #[test]
+    fn offline_preview_reads_existing_pixels_without_source_metadata_or_regeneration() {
+        let path = format!("/lap-test-unmounted-volume/{}.raw", uuid::Uuid::new_v4());
+        assert!(!std::path::Path::new(&path).exists());
+        let options = RawDisplayOptions::default();
+        assert!(get_cached_preview_bytes(&path, options).is_none());
+        FILE_IMAGE_RESULT_CACHE.lock().unwrap().insert(
+            path.clone(),
+            (3, 123),
+            options,
+            vec![1, 2, 3],
+        );
+        assert_eq!(
+            get_cached_preview_bytes(&path, options),
+            Some(vec![1, 2, 3])
+        );
+        // Offline browsing may use an existing preview from a different RAW mode.
+        assert_eq!(
+            get_cached_preview_bytes(&path, RawDisplayOptions::rendered_bright()),
+            Some(vec![1, 2, 3])
+        );
+        RAW_PREVIEW_CACHE.lock().unwrap().push_back((
+            path.clone(),
+            (3, 123),
+            options,
+            (vec![4, 5, 6], "embedded", false),
+        ));
+        assert_eq!(
+            get_cached_preview_bytes(&path, options),
+            Some(vec![4, 5, 6])
+        );
+        assert_eq!(
+            get_cached_preview_bytes(&path, RawDisplayOptions::rendered_bright()),
+            Some(vec![4, 5, 6])
+        );
+        let mut cache = FILE_IMAGE_RESULT_CACHE.lock().unwrap();
+        cache.entries.remove(&path);
+        cache.order.retain(|entry| entry != &path);
+        RAW_PREVIEW_CACHE
+            .lock()
+            .unwrap()
+            .retain(|entry| entry.0 != path);
+    }
 }

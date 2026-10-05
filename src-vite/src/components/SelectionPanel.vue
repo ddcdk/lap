@@ -148,26 +148,26 @@
         <div class="flex flex-wrap items-center gap-1">
           <PanelActionButton
             :icon="IconFileArrowRight"
-            :disabled="selectedCount === 0"
+            :disabled="selectedCount === 0 || originalsUnavailable"
             @click="$emit('moveWithinLibrary')"
           >
             {{ $t('menu.file.move_within_library') }}
           </PanelActionButton>
           <PanelActionButton
-            :disabled="selectedCount === 0"
+            :disabled="selectedCount === 0 || originalsUnavailable"
             @click="$emit('moveToFolder')"
           >
             {{ $t('menu.file.move_to_folder') }}
           </PanelActionButton>
           <PanelActionButton
-            :disabled="selectedCount === 0"
+            :disabled="selectedCount === 0 || originalsUnavailable"
             @click="$emit('copyToFolder')"
           >
             {{ $t('menu.file.copy_to_folder') }}
           </PanelActionButton>
           <PanelActionButton
             :icon="IconTrash"
-            :disabled="selectedCount === 0"
+            :disabled="selectedCount === 0 || originalsUnavailable"
             danger
             @click="$emit('trash')"
           >
@@ -235,6 +235,7 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  originalsUnavailable: { type: Boolean, default: false },
   selectedCount: {
     type: Number,
     default: 0,

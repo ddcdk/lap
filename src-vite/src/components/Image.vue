@@ -25,7 +25,7 @@
       </div>
     </transition>
 
-    <div v-if="Number(fileType) === 3" class="absolute left-4 bottom-4 z-60 flex items-center gap-2" @dblclick.stop @mousedown.stop>
+    <div v-if="Number(fileType) === 3 && !offlinePreview" class="absolute left-4 bottom-4 z-60 flex items-center gap-2" @dblclick.stop @mousedown.stop>
       <button 
         class="inline-flex h-10 items-center gap-1 rounded-box px-3 bg-base-100/70 hover:bg-base-100 text-sm font-medium shadow transition-colors cursor-pointer"
         :class="effectiveRawSource !== 'pair' ? 'text-primary hover:text-primary' : 'text-base-content/70 hover:text-base-content'" :aria-pressed="effectiveRawSource !== 'pair'" :title="rawSwitchTitle" @click.stop="switchRaw">
@@ -45,7 +45,7 @@
       <div v-if="loadError" class="absolute inset-0 bg-base-100/50 flex items-center justify-center z-50 rounded-box">
         <div class="h-full flex flex-col items-center justify-center text-base-content/30">
           <IconError class="w-8 h-8 mb-2" />
-          <span>{{ $t('image_viewer.failed') }}</span>
+          <span>{{ $t(offlinePreview ? 'tooltip.not_found.files' : 'image_viewer.failed') }}</span>
         </div>
       </div>
     </transition>
@@ -210,12 +210,15 @@ import { rawDisplayKey, getRawDisplayOptions, appendRawDisplayParams, nextRawPre
 import { useI18n } from 'vue-i18n';
 import { useToast } from '@/common/toast';
 
+import { checkFileAccessibility } from '@/common/api';
+import { setFileAccessibility } from '@/common/availability';
 import { IconError, IconBrightness } from '@/common/icons';
 
 const { t } = useI18n();
 const toast = useToast();
 // Props
 const props = defineProps({
+  originalUnavailable: { type: Boolean, default: false },
   filePath: {
     type: String,
     required: false,
@@ -299,6 +302,7 @@ const maxScale = ref(10);                   // Maximum zoom level
 const getActualSizeScale = () => 1 / (window.devicePixelRatio || 1);
 const getDisplayScale = (scaleValue: number) => scaleValue * (window.devicePixelRatio || 1);
 const imageRotate = ref([0, 0]);            // Image rotation
+const imageNaturalSize = ref([{ width: 0, height: 0 }, { width: 0, height: 0 }]);
 const imageSize = ref([{ width: 0, height: 0 }, { width: 0, height: 0 }]);       // actual image size
 const imageSizeRotated = ref([{ width: 0, height: 0 }, { width: 0, height: 0 }]); // image size after rotation
 
@@ -404,6 +408,7 @@ const getImageStyle = (index: number) => ({
 // loading and error overlays
 const isLoading = ref(false);
 const loadError = ref(false);
+const offlinePreview = ref(false);
 let loadingTimeout: NodeJS.Timeout | null = null;
 
 // Show the RAW spinner only after loading has persisted for a moment, so fast
@@ -814,6 +819,7 @@ function setImageSlot(
   layoutWidth: number = naturalWidth,
   layoutHeight: number = naturalHeight,
 ) {
+  imageNaturalSize.value[slotIndex] = { width: naturalWidth, height: naturalHeight };
   imageSrc.value[slotIndex] = src;
   imageFilePath.value[slotIndex] = filePath;
   imageRotate.value[slotIndex] = props.rotate;
@@ -1361,12 +1367,53 @@ const updatePosition = () => {
 // Preloaded next images must not retain a different RAW display policy.
 watch(rawDisplayKey, () => preloadCache.clear(), { flush: 'sync' });
 
+async function showOfflinePreview(filePath: string, loadingId: number) {
+  if (loadingId !== currentLoadingId.value) return;
+  if (loadingTimeout) { clearTimeout(loadingTimeout); loadingTimeout = null; }
+  isLoading.value = false;
+  rawRequestPending.value = false;
+  if (imageFilePath.value[activeImage.value] === filePath && imageSrc.value[activeImage.value]) {
+    offlinePreview.value = true;
+    const size = imageNaturalSize.value[activeImage.value];
+    maxScale.value = Math.max(scale.value[activeImage.value], Math.min(1, size.width / (imageSize.value[activeImage.value].width || 1)));
+    return;
+  }
+  let loaded: LoadedImage | null = null;
+  try {
+    const cached = await preloadCache.get(filePath);
+    if (cached) loaded = await loadPlaceholderResource(cached.src);
+  } catch { /* Try thumbnail next. */ }
+  if (!loaded && props.fileId) {
+    const preview = getPreviewUrl(props.fileId, filePath, false, props.fileVersion);
+    try { loaded = await loadPlaceholderResource(`${preview}${preview.includes('?') ? '&' : '?'}cachedOnly=true`); } catch { /* Try thumbnail next. */ }
+  }
+  if (!loaded) {
+    try { loaded = await loadPlaceholderResource(await getEffectiveThumbnailSrc()); } catch { /* No local preview. */ }
+  }
+  if (loadingId !== currentLoadingId.value) return;
+  offlinePreview.value = true;
+  if (!loaded) {
+    imageSrc.value = ['', ''];
+    imageFilePath.value = ['', ''];
+    loadError.value = true;
+    return;
+  }
+  const slot = activeImage.value ^ 1;
+  setImageSlot(slot, filePath, loaded.src, loaded.naturalWidth, loaded.naturalHeight);
+  scale.value[slot] = 1;
+  position.value[slot] = { x: 0, y: 0 };
+  isZoomFit.value = true;
+  maxScale.value = 1;
+  onImageReady(slot);
+}
+
 // Watch file changes and the selected RAW preview source.
 watch([
   () => props.filePath,
   () => props.fileVersion,
   () => Number(props.fileType || 0) === 3 ? `${rawDisplayKey()}:${rawSelectionVersion.value}:${JSON.stringify(rawOverride.value)}` : '',
-], async ([newFilePath, newFileVersion, newRawThumbnailSource], [oldFilePath, oldFileVersion, oldRawThumbnailSource]) => {
+  () => props.originalUnavailable,
+], async ([newFilePath, newFileVersion, newRawThumbnailSource], [oldFilePath, oldFileVersion, oldRawThumbnailSource, oldUnavailable]) => {
   // Cancel previous loading
   rawAbortController?.abort();
   currentLoadingId.value++;
@@ -1375,7 +1422,7 @@ watch([
   if (
     newFilePath
     && newFilePath === oldFilePath
-    && (newFileVersion !== oldFileVersion || newRawThumbnailSource !== oldRawThumbnailSource)
+    && (newFileVersion !== oldFileVersion || newRawThumbnailSource !== oldRawThumbnailSource || (oldUnavailable && !props.originalUnavailable))
   ) {
     preloadCache.delete(newFilePath);
   }
@@ -1387,12 +1434,18 @@ watch([
   }
 
   loadError.value = false; // Reset error state
+  offlinePreview.value = false;
+  maxScale.value = 10;
 
   if (!newFilePath) {
     isLoading.value = false;
     return;
   }
 
+  if (props.originalUnavailable) {
+    await showOfflinePreview(String(newFilePath), loadingId);
+    return;
+  }
   if (Number(props.fileType) === 3) isLoading.value = true;
 
   // Set timeout to show loading overlay if loading takes too long
@@ -1539,6 +1592,15 @@ watch([
     }
     isLoading.value = false;
     rawRequestPending.value = false;
+    try {
+      if (!await checkFileAccessibility(String(newFilePath))) {
+        if (loadingId !== currentLoadingId.value) return;
+        setFileAccessibility(String(newFilePath), false);
+        await showOfflinePreview(String(newFilePath), loadingId);
+        return;
+      }
+    } catch { /* Keep the decoding error if access could not be checked. */ }
+    if (loadingId !== currentLoadingId.value) return;
     if (isRawPreview && newFilePath === oldFilePath && rawSource.value) {
       // A RAW mode switch that the decoder can't fulfil (e.g. some NEF variants
       // only have an embedded preview). Keep the current image; explain why.
@@ -1556,6 +1618,7 @@ watch(() => props.fileId, () => {
 
 // watch thumbnail source changes to update placeholder if original is still loading
 watch(displayThumbnailSrc, async (newThumbSrc) => {
+  if (props.originalUnavailable || offlinePreview.value) return;
   if (Number(props.fileType) === 3) return;
   if (!newThumbSrc) return;
   const currentFilePath = props.filePath;
@@ -1584,7 +1647,7 @@ watch(displayThumbnailSrc, async (newThumbSrc) => {
   try {
     const placeholder = await loadPlaceholderResource(newThumbSrc);
     // Never downgrade a full image that finished loading while the placeholder was decoding.
-    if (loadingId !== currentLoadingId.value || imageSrc.value.includes(fullImageSrc)) return;
+    if (loadingId !== currentLoadingId.value || offlinePreview.value || imageSrc.value.includes(fullImageSrc)) return;
     const layout = getCompatibleLayout(
       placeholder.naturalWidth,
       placeholder.naturalHeight,

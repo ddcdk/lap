@@ -39,6 +39,7 @@
                   'w-full px-2 py-1 flex justify-between text-sm whitespace-nowrap',
                   item.disabled ? 'text-base-content/30' : 'hover:bg-base-100/30 hover:text-base-content hover:rounded-box cursor-pointer group',
                 ]"
+                :aria-disabled="!!item.disabled"
                 @click="handleMainItemClick(index, item, $event)"
               >
                 <div class="w-full flex items-center">
@@ -88,6 +89,7 @@
                   'w-full px-2 py-1 flex justify-between text-sm whitespace-nowrap',
                   child.disabled ? 'text-base-content/30' : 'hover:bg-base-100/30 hover:text-base-content hover:rounded-box cursor-pointer',
                 ]"
+                :aria-disabled="!!child.disabled"
                 @click="handleLeafClick(child)"
               >
                 <div class="w-full flex items-center">

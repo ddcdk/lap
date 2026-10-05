@@ -3423,8 +3423,12 @@ struct ThumbnailReadyPayload {
     invalidate: bool,
 }
 
-pub fn inaccessible_album_ids() -> Vec<i64> {
-    INACCESSIBLE_ALBUM_IDS.lock().unwrap().iter().copied().collect()
+pub fn file_accessible(path: &str) -> bool {
+    std::path::Path::new(path).is_file() && std::fs::File::open(path).is_ok()
+}
+
+pub fn album_accessible(album_id: i64) -> bool {
+    !INACCESSIBLE_ALBUM_IDS.lock().unwrap().contains(&album_id)
 }
 
 pub fn refresh_album_accessibility(album: &mut Album) {

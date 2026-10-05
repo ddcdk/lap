@@ -224,6 +224,10 @@
       }
     }
   },
+  "offline": {
+    "original_unavailable": "원본 파일에 접근할 수 없습니다",
+    "requires_original": "원본 파일이 필요합니다. 저장 장치를 다시 연결하세요."
+  },
   "import_organize": {
     "section_folders": "폴더 선택",
     "section_status": "가져오기 상태",

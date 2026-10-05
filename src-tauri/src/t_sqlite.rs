@@ -632,12 +632,11 @@ impl Album {
             "SELECT b.album_id, COUNT(DISTINCT a.id)
              FROM afiles a
              JOIN afolders b ON b.id = a.folder_id
-             WHERE {} AND {}{}{}
+             WHERE {} AND {}{}
              GROUP BY b.album_id",
             AFile::search_exclusion_condition("b"),
             AFile::live_photo_companion_exclusion_condition(),
             AFile::album_filter_sql("a"),
-            AFile::inaccessible_album_filter("b"),
         );
         let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
         let rows = stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
@@ -1572,6 +1571,8 @@ pub struct AFile {
     pub live_photo_video_id: Option<i64>,   // paired Live Photo MOV file id
     pub live_photo_video_path: Option<String>, // paired Live Photo MOV path
     #[serde(default = "default_album_visible")]
+    pub album_accessible: bool, // output-only; never controls catalog visibility
+    #[serde(default = "default_album_visible")]
     pub album_visible: bool, // output-only: visibility under this album's filters
     pub motion_photo_offset: Option<i64>,   // byte offset of embedded MP4 (Android Motion Photo)
 }
@@ -1687,11 +1688,10 @@ impl ACollection {
              FROM acollections_files cf
              JOIN afiles a ON a.id = cf.file_id
              JOIN afolders b ON b.id = a.folder_id
-             WHERE {}{}{} AND {}
+             WHERE {}{} AND {}
              GROUP BY cf.collection_id",
             AFile::live_photo_companion_exclusion_condition(),
             AFile::album_filter_sql("a"),
-            AFile::inaccessible_album_filter("b"),
             AFile::search_exclusion_condition("b"),
         );
         let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
@@ -2200,19 +2200,13 @@ pub struct LibraryVisibleCounts {
 impl AFile {
     pub fn get_library_visible_counts() -> Result<LibraryVisibleCounts, String> {
         let conn = open_conn()?;
-        let today = chrono::Local::now().format("%m-%d").to_string();
-        let query = format!("SELECT COUNT(*), COALESCE(SUM(a.is_favorite=1),0), COALESCE(SUM(strftime('%m-%d',a.taken_date,'unixepoch','localtime')=?1),0), COALESCE(SUM(a.rating>0),0), COALESCE(SUM(a.rating=0),0), COALESCE(SUM(a.rating=1),0), COALESCE(SUM(a.rating=2),0), COALESCE(SUM(a.rating=3),0), COALESCE(SUM(a.rating=4),0), COALESCE(SUM(a.rating=5),0), COALESCE(SUM(a.culling_flag=1),0), COALESCE(SUM(a.culling_flag=2),0), COALESCE(SUM(a.culling_flag=0),0) FROM afiles a JOIN afolders b ON b.id=a.folder_id WHERE {} AND {}{}{}", Self::search_exclusion_condition("b"), Self::live_photo_companion_exclusion_condition(), Self::album_filter_sql("a"), Self::inaccessible_album_filter("b"));
-        conn.query_row(&query, params![today], |r| Ok(LibraryVisibleCounts { all:r.get(0)?, favorite:r.get(1)?, today:r.get(2)?, rated:r.get(3)?, unrated:r.get(4)?, rating_1:r.get(5)?, rating_2:r.get(6)?, rating_3:r.get(7)?, rating_4:r.get(8)?, rating_5:r.get(9)?, pick:r.get(10)?, reject:r.get(11)?, unreviewed:r.get(12)? })).map_err(|e| e.to_string())
+        Self::get_library_visible_counts_on(&conn)
     }
-    fn inaccessible_album_filter(folder_alias: &str) -> String {
-        match t_utils::inaccessible_album_ids().as_slice() {
-            [] => String::new(),
-            ids => format!(
-                " AND {}.album_id NOT IN ({})",
-                folder_alias,
-                ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",")
-            ),
-        }
+
+    fn get_library_visible_counts_on(conn: &Connection) -> Result<LibraryVisibleCounts, String> {
+        let today = chrono::Local::now().format("%m-%d").to_string();
+        let query = format!("SELECT COUNT(*), COALESCE(SUM(a.is_favorite=1),0), COALESCE(SUM(strftime('%m-%d',a.taken_date,'unixepoch','localtime')=?1),0), COALESCE(SUM(a.rating>0),0), COALESCE(SUM(a.rating=0),0), COALESCE(SUM(a.rating=1),0), COALESCE(SUM(a.rating=2),0), COALESCE(SUM(a.rating=3),0), COALESCE(SUM(a.rating=4),0), COALESCE(SUM(a.rating=5),0), COALESCE(SUM(a.culling_flag=1),0), COALESCE(SUM(a.culling_flag=2),0), COALESCE(SUM(a.culling_flag=0),0) FROM afiles a JOIN afolders b ON b.id=a.folder_id WHERE {} AND {}{}", Self::search_exclusion_condition("b"), Self::live_photo_companion_exclusion_condition(), Self::album_filter_sql("a"));
+        conn.query_row(&query, params![today], |r| Ok(LibraryVisibleCounts { all:r.get(0)?, favorite:r.get(1)?, today:r.get(2)?, rated:r.get(3)?, unrated:r.get(4)?, rating_1:r.get(5)?, rating_2:r.get(6)?, rating_3:r.get(7)?, rating_4:r.get(8)?, rating_5:r.get(9)?, pick:r.get(10)?, reject:r.get(11)?, unreviewed:r.get(12)? })).map_err(|e| e.to_string())
     }
 
     /// Exclude files whose folder path is the excluded folder itself or one of its children.
@@ -2681,6 +2675,7 @@ impl AFile {
             live_photo_video_id: None,
             live_photo_video_path: None,
             motion_photo_offset,
+            album_accessible: true,
             album_visible: true,
         };
 
@@ -3299,6 +3294,7 @@ impl AFile {
             live_photo_video_id: row.get(53)?,
             live_photo_video_path: row.get(54)?,
             motion_photo_offset: row.get(55)?,
+            album_accessible: row.get::<_, Option<i64>>(44)?.is_none_or(t_utils::album_accessible),
             album_visible: row.get(56)?,
         })
     }
@@ -3830,16 +3826,9 @@ impl AFile {
                 .collect::<Vec<_>>()
                 .join(",");
             let sql = format!(
-                "{} WHERE a.id IN ({}){}",
+                "{} WHERE a.id IN ({})",
                 Self::build_base_query(),
                 placeholders,
-                match t_utils::inaccessible_album_ids().as_slice() {
-                    [] => String::new(),
-                    ids => format!(
-                        " AND b.album_id NOT IN ({})",
-                        ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",")
-                    ),
-                }
             );
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             let rows = stmt
@@ -4600,14 +4589,13 @@ impl AFile {
             "SELECT {} AS group_date, COUNT(1)
             FROM afiles a
             JOIN afolders b ON a.folder_id = b.id
-            WHERE {} IS NOT NULL AND {} >= 86400 AND {}{}{} AND {}
+            WHERE {} IS NOT NULL AND {} >= 86400 AND {}{} AND {}
             GROUP BY {}
             ORDER BY group_date {}",
             date_expr,
             date_col,
             date_col,
             Self::live_photo_companion_exclusion_condition(),
-            Self::inaccessible_album_filter("b"),
             Self::album_filter_sql("a"),
             Self::search_exclusion_condition("b"),
             date_expr,
@@ -4635,18 +4623,6 @@ impl AFile {
         let mut conditions: Vec<String> =
             vec![Self::live_photo_companion_exclusion_condition().to_string()];
         let mut sql_params: Vec<Box<dyn ToSql>> = Vec::new();
-
-        let inaccessible_album_ids = t_utils::inaccessible_album_ids();
-        if !inaccessible_album_ids.is_empty() {
-            conditions.push(format!(
-                "b.album_id NOT IN ({})",
-                inaccessible_album_ids
-                    .iter()
-                    .map(i64::to_string)
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ));
-        }
 
         if !params.search_file_name.is_empty() {
             conditions.push("(a.name LIKE ? COLLATE NOCASE OR a.comments LIKE ? COLLATE NOCASE)".to_string());
@@ -5846,18 +5822,6 @@ impl AFile {
 
         Self::append_album_filter(&mut conditions);
 
-        let inaccessible_album_ids = t_utils::inaccessible_album_ids();
-        if !inaccessible_album_ids.is_empty() {
-            conditions.push(format!(
-                "b.album_id NOT IN ({})",
-                inaccessible_album_ids
-                    .iter()
-                    .map(i64::to_string)
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ));
-        }
-
         conditions.push(Self::search_exclusion_condition("b"));
         conditions.push(Self::live_photo_companion_exclusion_condition().to_string());
 
@@ -6548,18 +6512,6 @@ impl AFile {
 
         query.push_str(" AND ");
         query.push_str(&Self::search_exclusion_condition("b"));
-
-        let inaccessible_album_ids = t_utils::inaccessible_album_ids();
-        if !inaccessible_album_ids.is_empty() {
-            query.push_str(&format!(
-                " AND b.album_id NOT IN ({})",
-                inaccessible_album_ids
-                    .iter()
-                    .map(i64::to_string)
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ));
-        }
 
         query.push_str(&Self::album_filter_sql("a"));
 
@@ -7620,7 +7572,12 @@ impl AThumb {
         orientation: i32,
         prefer_embedded_raw_thumbnail: RawDisplayOptions,
         force_regenerate: bool,
+        album_accessible: bool,
     ) -> Result<Option<Self>, String> {
+        if !album_accessible || (force_regenerate && !t_utils::file_accessible(file_path)) {
+            return Self::fetch(file_id);
+        }
+
         if force_regenerate {
             let _ = Self::delete(file_id);
             return Ok(None);
@@ -7667,7 +7624,12 @@ impl AThumb {
         prefer_embedded_raw_thumbnail: RawDisplayOptions,
         force_regenerate: bool,
         trust_cached: bool,
+        album_accessible: bool,
     ) -> Result<Option<Self>, String> {
+        if !album_accessible || (force_regenerate && !t_utils::file_accessible(file_path)) {
+            return Ok(Some(thumbnail));
+        }
+
         if force_regenerate {
             let _ = Self::delete(thumbnail.file_id);
             return Ok(None);
@@ -7715,6 +7677,7 @@ impl AThumb {
         force_regenerate: bool,
         seek_percent: Option<u8>,
     ) {
+        if !t_utils::album_accessible(album_id) { return; }
         if !Self::try_begin_background_task(file_id, thumbnail_size) {
             return;
         }
@@ -7779,6 +7742,11 @@ impl AThumb {
         known_duration: Option<u64>,
         seek_percent: Option<u8>,
     ) -> Result<Option<Self>, String> {
+        let album_accessible = Self::get_file_album_id(file_id)?.is_none_or(t_utils::album_accessible);
+        if !album_accessible || (force_regenerate && !t_utils::file_accessible(file_path)) {
+            return Self::fetch(file_id);
+        }
+
         if force_regenerate {
             let _ = Self::delete(file_id);
         } else if let Some(thumb) =
@@ -7789,6 +7757,7 @@ impl AThumb {
                 orientation,
                 prefer_embedded_raw_thumbnail,
                 false,
+                album_accessible,
             )?
         {
             if thumb.error_code != 1 {
@@ -7806,6 +7775,7 @@ impl AThumb {
                 orientation,
                 prefer_embedded_raw_thumbnail,
                 false,
+                album_accessible,
             )? {
                 if hydrated.error_code != 1 {
                     return Ok(Some(hydrated));
@@ -7996,10 +7966,9 @@ impl ATag {
             "(SELECT COUNT(*) FROM afile_tags ft
               JOIN afiles a ON a.id = ft.file_id
               JOIN afolders b ON b.id = a.folder_id
-              WHERE ft.tag_id = atags.id AND {}{}{} AND {})",
+              WHERE ft.tag_id = atags.id AND {}{} AND {})",
             AFile::live_photo_companion_exclusion_condition(),
             AFile::album_filter_sql("a"),
-            AFile::inaccessible_album_filter("b"),
             AFile::search_exclusion_condition("b"),
         );
         let order_clause = match sort {
@@ -8032,11 +8001,10 @@ impl ATag {
              FROM afile_tags ft
              JOIN afiles a ON a.id = ft.file_id
              JOIN afolders b ON b.id = a.folder_id
-             WHERE {}{}{} AND {}
+             WHERE {}{} AND {}
              GROUP BY ft.tag_id",
             AFile::live_photo_companion_exclusion_condition(),
             AFile::album_filter_sql("a"),
-            AFile::inaccessible_album_filter("b"),
             AFile::search_exclusion_condition("b"),
         );
         let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
@@ -8057,11 +8025,10 @@ impl ATag {
              JOIN atags t ON t.id = ft.tag_id
              JOIN afiles a ON a.id = ft.file_id
              JOIN afolders b ON b.id = a.folder_id
-             WHERE {}{}{} AND {}
+             WHERE {}{} AND {}
              GROUP BY t.group_id",
             AFile::live_photo_companion_exclusion_condition(),
             AFile::album_filter_sql("a"),
-            AFile::inaccessible_album_filter("b"),
             AFile::search_exclusion_condition("b"),
         );
         let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
@@ -8463,9 +8430,8 @@ impl Person {
                 .replace('_', "\\_")
         );
         let visible_file_conditions = format!(
-            "{}{} AND {} AND {}",
+            "{} AND {} AND {}",
             AFile::album_filter_sql("a"),
-            AFile::inaccessible_album_filter("b"),
             AFile::search_exclusion_condition("b"),
             AFile::live_photo_companion_exclusion_condition(),
         );
@@ -9103,9 +9069,8 @@ impl Face {
     pub fn get_stats_full() -> Result<(usize, usize, usize, usize), String> {
         let conn = open_conn()?;
         let visible_file_conditions = format!(
-            "{}{} AND {} AND {}",
+            "{} AND {} AND {}",
             AFile::album_filter_sql("a"),
-            AFile::inaccessible_album_filter("b"),
             AFile::search_exclusion_condition("b"),
             AFile::live_photo_companion_exclusion_condition(),
         );
@@ -9178,9 +9143,9 @@ impl ACamera {
             WHERE a.e_make IS NOT NULL AND a.e_model IS NOT NULL
                 AND a.id NOT IN (
                     SELECT live_photo_video_id FROM afiles WHERE live_photo_video_id IS NOT NULL
-                ){}{} AND {}
+                ){} AND {}
             GROUP BY UPPER(a.e_make), a.e_model
-            ORDER BY UPPER(a.e_make), a.e_model", AFile::inaccessible_album_filter("b"), AFile::album_filter_sql("a"), AFile::search_exclusion_condition("b"));
+            ORDER BY UPPER(a.e_make), a.e_model", AFile::album_filter_sql("a"), AFile::search_exclusion_condition("b"));
 
         let mut stmt = conn.prepare(query.as_str()).map_err(|e| e.to_string())?;
 
@@ -9256,9 +9221,9 @@ impl ALens {
             WHERE a.e_lens_make IS NOT NULL AND a.e_lens_model IS NOT NULL
                 AND a.id NOT IN (
                     SELECT live_photo_video_id FROM afiles WHERE live_photo_video_id IS NOT NULL
-                ){}{} AND {}
+                ){} AND {}
             GROUP BY UPPER(a.e_lens_make), a.e_lens_model
-            ORDER BY UPPER(a.e_lens_make), a.e_lens_model", AFile::inaccessible_album_filter("b"), AFile::album_filter_sql("a"), AFile::search_exclusion_condition("b"));
+            ORDER BY UPPER(a.e_lens_make), a.e_lens_model", AFile::album_filter_sql("a"), AFile::search_exclusion_condition("b"));
 
         let mut stmt = conn.prepare(query.as_str()).map_err(|e| e.to_string())?;
 
@@ -9336,9 +9301,9 @@ impl ALocation {
             WHERE COALESCE(a.geo_admin1, '') <> '' AND COALESCE(a.geo_name, '') <> ''
                 AND a.id NOT IN (
                     SELECT live_photo_video_id FROM afiles WHERE live_photo_video_id IS NOT NULL
-                ){}{} AND {}
+                ){} AND {}
             GROUP BY a.geo_cc, a.geo_admin1, a.geo_name
-            ORDER BY a.geo_cc, a.geo_admin1, a.geo_name", AFile::inaccessible_album_filter("b"), AFile::album_filter_sql("a"), AFile::search_exclusion_condition("b"));
+            ORDER BY a.geo_cc, a.geo_admin1, a.geo_name", AFile::album_filter_sql("a"), AFile::search_exclusion_condition("b"));
 
         let mut stmt = conn.prepare(query.as_str()).map_err(|e| e.to_string())?;
 
@@ -10181,6 +10146,78 @@ mod album_filter_tests {
         conn
     }
 
+    #[test]
+    fn offline_album_remains_in_all_files_folder_search_and_smart_queries() {
+        let conn = fixture();
+        conn.execute_batch(
+            "ALTER TABLE afolders ADD COLUMN is_excluded_from_search INTEGER DEFAULT 0;
+            ALTER TABLE afiles ADD COLUMN is_favorite INTEGER DEFAULT 1;
+            ALTER TABLE afiles ADD COLUMN taken_date INTEGER DEFAULT 0;
+            ALTER TABLE afiles ADD COLUMN culling_flag INTEGER DEFAULT 0;",
+        )
+        .unwrap();
+        let before = AFile::get_library_visible_counts_on(&conn).unwrap().all;
+        let mut album: Album = serde_json::from_value(serde_json::json!({
+            "id":1,"name":"Offline","path":"/lap-test-unmounted-volume/photos",
+            "file_types":7,"small_image_filter":0,"excluded_folders":[]
+        }))
+        .unwrap();
+        t_utils::refresh_album_accessibility(&mut album);
+        assert!(!album.is_accessible);
+        assert_eq!(
+            AFile::get_library_visible_counts_on(&conn).unwrap().all,
+            before
+        );
+        let mut params: QueryParams = serde_json::from_value(serde_json::json!({
+            "searchFileName":"","searchFileType":0,"sortType":0,"sortOrder":0,
+            "searchAllSubfolders":"","searchFolder":"","startDate":0,"endDate":0,
+            "calendarSort":0,"make":"","model":"","lensMake":"","lensModel":"",
+            "locationAdmin1":"","locationName":"","isFavorite":false,"rating":-1,
+            "tagId":0,"personId":0
+        }))
+        .unwrap();
+        let query_ids = |params: &QueryParams| {
+            let (joins, conditions, values) = AFile::build_search_query_parts(params);
+            let sql = format!(
+                "SELECT a.id FROM afiles a JOIN afolders b ON b.id=a.folder_id {}{} ORDER BY a.id",
+                joins, conditions
+            );
+            let mut stmt = conn.prepare(&sql).unwrap();
+            stmt.query_map(params_from_iter(values.iter()), |r| r.get::<_, i64>(0))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+        };
+        let all = query_ids(&params);
+        assert!(all.contains(&2));
+        params.search_folder = "/photos".into();
+        assert!(query_ids(&params).contains(&2));
+        params.search_folder.clear();
+        assert_eq!(all, query_ids(&params)); // #351: returning to All Files must retain rows.
+        let smart: SmartQueryParams = serde_json::from_value(serde_json::json!({"sortType":0,"sortOrder":0,"rules":[{"id":"rating","field":"rating","operator":"eq","value":5}]})).unwrap();
+        let (joins, conditions, values, _) = AFile::build_smart_query_parts(&smart).unwrap();
+        let sql = format!(
+            "SELECT a.id FROM afiles a JOIN afolders b ON b.id=a.folder_id {}{} ORDER BY a.id",
+            joins, conditions
+        );
+        let ids = conn
+            .prepare(&sql)
+            .unwrap()
+            .query_map(params_from_iter(values.iter()), |r| r.get::<_, i64>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(ids.contains(&2));
+        album.path = std::env::temp_dir().to_string_lossy().to_string();
+        t_utils::refresh_album_accessibility(&mut album);
+        assert!(album.is_accessible);
+        assert_eq!(
+            AFile::get_library_visible_counts_on(&conn).unwrap().all,
+            before
+        );
+        assert_eq!(all, query_ids(&params));
+    }
+
     fn visible(conn: &Connection) -> Vec<i64> {
         let query = |predicate: String| {
             let sql = format!("SELECT a.id FROM afiles a WHERE {} AND {} ORDER BY a.id",
@@ -10298,6 +10335,57 @@ mod album_filter_tests {
 mod raw_display_cache_tests {
     use super::*;
     use crate::t_raw_display::RawPreviewMode;
+
+    #[test]
+    fn unavailable_original_preserves_cached_thumbnail_even_during_forced_refresh() {
+        let thumb = AThumb {
+            id: Some(1),
+            file_id: 42,
+            error_code: 0,
+            thumb_data: Some(vec![1, 2, 3]),
+            thumb_key: Some("offline-cache-key".into()),
+            thumb_mtime: Some(123),
+            thumb_size: Some(256),
+            updated_at: Some(123),
+            thumb_data_base64: Some("AQID".into()),
+        };
+        let retained = AThumb::resolve_fetched_thumb_if_available(
+            thumb,
+            "/lap-test-unmounted-volume/image.jpg",
+            512,
+            1,
+            RawDisplayOptions::default(),
+            true,
+            false,
+            true,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(retained.thumb_data, Some(vec![1, 2, 3]));
+        assert_eq!(retained.thumb_key.as_deref(), Some("offline-cache-key"));
+        assert_eq!(retained.thumb_size, Some(256));
+    }
+
+    #[test]
+    fn known_offline_album_returns_cache_without_validating_or_deleting_it() {
+        let original = std::env::temp_dir().join(format!("lap-offline-thumb-{}.jpg", uuid::Uuid::new_v4()));
+        std::fs::write(&original, b"readable original").unwrap();
+        let thumb = AThumb {
+            id: Some(1), file_id: 42, error_code: 0,
+            thumb_data: Some(vec![1, 2, 3]), thumb_key: Some("offline-cache-key".into()),
+            thumb_mtime: Some(123), thumb_size: Some(256), updated_at: Some(123),
+            thumb_data_base64: Some("AQID".into()),
+        };
+        // Even an apparently readable source must not be probed or regenerated
+        // once its album has been classified as offline.
+        let retained = AThumb::resolve_fetched_thumb_if_available(
+            thumb, original.to_str().unwrap(), 512, 1,
+            RawDisplayOptions::default(), true, false, false,
+        ).unwrap().unwrap();
+        assert_eq!(retained.thumb_data, Some(vec![1, 2, 3]));
+        assert_eq!(retained.thumb_key.as_deref(), Some("offline-cache-key"));
+        std::fs::remove_file(original).unwrap();
+    }
 
     #[test]
     fn raw_display_cache_separates_modes_and_normalizes_missing_orientation() {

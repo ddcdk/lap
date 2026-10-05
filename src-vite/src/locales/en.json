@@ -224,6 +224,10 @@
       }
     }
   },
+  "offline": {
+    "original_unavailable": "Original file is unavailable",
+    "requires_original": "Requires the original file. Reconnect the storage device to use this action."
+  },
   "import_organize": {
     "section_folders": "Select folder",
     "section_status": "Import status",

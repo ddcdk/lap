@@ -224,6 +224,10 @@
       }
     }
   },
+  "offline": {
+    "original_unavailable": "Het oorspronkelijke bestand is niet beschikbaar",
+    "requires_original": "Vereist het oorspronkelijke bestand. Sluit het opslagapparaat opnieuw aan."
+  },
   "import_organize": {
     "section_folders": "Kies map",
     "section_status": "Importstatus",

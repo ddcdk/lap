@@ -7,6 +7,13 @@
     @wheel.prevent="handleWheel"
     @contextmenu="handleContextMenu"
   >
+    <div v-if="originalUnavailable" class="absolute inset-0 z-30 flex items-center justify-center bg-base-200">
+      <img v-if="offlinePoster" :src="offlinePoster" class="max-w-full max-h-full object-contain" @error="offlinePoster = ''" />
+      <div v-else class="flex flex-col items-center justify-center text-base-content/30">
+        <IconVideoSlash class="w-8 h-8 mb-2" />
+        <span>{{ $t('tooltip.not_found.files') }}</span>
+      </div>
+    </div>
     <TransitionGroup :name="transitionName" @after-leave="handleTransitionEnd">
       <div
         v-for="index in [0, 1]"
@@ -72,7 +79,7 @@ import { config } from '@/common/config';
 import { IconVideoSlash, IconVideoPlay, IconVideoReplay } from '@/common/icons';
 import videojs from 'video.js/core';
 import 'video.js/dist/video-js.min.css';
-import { getAssetSrc, isLinux, isMac, isWin } from '@/common/utils';
+import { getThumbUrl, getAssetSrc, isLinux, isMac, isWin } from '@/common/utils';
 import { openFileWithApp } from '@/common/api';
 import zhCN from 'video.js/dist/lang/zh-CN.json';
 import {
@@ -85,6 +92,9 @@ import {
 videojs.addLanguage('zh-CN', zhCN);
 
 const props = defineProps({
+  originalUnavailable: { type: Boolean, default: false },
+  fileId: { type: Number, default: 0 },
+  thumbnailSrc: { type: String, default: '' },
   filePath: { type: String, required: false },
   rotate: { type: Number, default: 0 },
   isZoomFit: { type: Boolean, default: false },
@@ -105,6 +115,10 @@ const players = ref<(ReturnType<typeof videojs> | null)[]>([null, null]);
 const playerEpochs = ref([0, 0]);
 const videoJsLang = computed(() => (config.settings.language === 'zh' ? 'zh-CN' : config.settings.language));
 
+const offlinePoster = ref('');
+watch(() => [props.originalUnavailable, props.fileId, props.thumbnailSrc], () => {
+  offlinePoster.value = props.thumbnailSrc || (props.fileId ? getThumbUrl(props.fileId, false, config.settings.thumbnailSize) : '');
+}, { immediate: true });
 const hasError = ref(false);
 const errorMessage = ref('');
 const isLoading = ref(false);
@@ -129,7 +143,7 @@ const loadAttemptCleanups: Array<(() => void) | null> = [null, null];
 const externalVideoApp = computed(() => config.defaultExternalApp('video'));
 const externalVideoAppPath = computed(() => String(externalVideoApp.value?.path || '').trim());
 const externalVideoAppName = computed(() => String(externalVideoApp.value?.name || '').trim());
-const canOpenExternalApp = computed(() => !!(props.filePath && externalVideoAppPath.value));
+const canOpenExternalApp = computed(() => !props.originalUnavailable && !!(props.filePath && externalVideoAppPath.value));
 const externalOpenLabel = computed(() => {
   if (externalVideoAppName.value) {
     return $t('video.errors.open_in_external_app_named', { app: externalVideoAppName.value }) || `Open in ${externalVideoAppName.value}`;
@@ -141,7 +155,7 @@ const loadingLabel = computed(() => (
 ));
 
 async function openInExternalApp() {
-  if (!props.filePath || !externalVideoAppPath.value) return;
+  if (props.originalUnavailable || !props.filePath || !externalVideoAppPath.value) return;
   await openFileWithApp(props.filePath, externalVideoAppPath.value);
 }
 
@@ -462,6 +476,11 @@ const loadVideo = async (filePath: string) => {
   await Promise.allSettled(cancelPromises);
 
   if (currentLoadId !== currentLoadingId) return;
+  if (props.originalUnavailable) {
+    getActivePlayer()?.pause();
+    resetLoadingUi();
+    return;
+  }
 
   const currentPlayer = getActivePlayer();
   if (currentPlayer) {
@@ -912,8 +931,8 @@ onBeforeUnmount(() => {
   });
 });
 
-watch(() => props.filePath, (newPath) => {
-  if (newPath) loadVideo(newPath);
+watch(() => [props.filePath, props.originalUnavailable], ([newPath]) => {
+  if (newPath) loadVideo(String(newPath));
 });
 
 watch(() => props.rotate, (val) => {

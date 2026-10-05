@@ -22,6 +22,7 @@
       @pointerenter="startMediaPreview"
       @pointerleave="stopMediaPreview"
     >
+      <IconPhoto v-if="!isThumbnailLoaded" class="absolute size-8 text-base-content/25" />
       <!-- image -->
       <img
         v-if="thumbnailSrc"
@@ -83,6 +84,10 @@
         @load="isAnimatedImagePreviewReady = true"
         @error="stopMediaPreview"
       />
+
+      <div v-if="originalUnavailable" class="pointer-events-none absolute right-0.5 bottom-0.5 z-20 thumb-badge thumb-badge-muted" :aria-label="t('offline.original_unavailable')">
+        <IconExclamation class="h-3.5 w-3.5 shrink-0 text-warning/70" />
+      </div>
 
       <!-- status badges -->
       <div
@@ -236,10 +241,13 @@ import { isMac, shortenFilename, formatFileSize, formatDimensionText, formatDura
 import { isWebViewVideoPlaybackDisabled, getGStreamerAvailability } from '@/common/video';
 import { claimHoverPreview, releaseHoverPreview } from '@/common/hoverPreview';
 import ContextMenu from '@/components/ContextMenu.vue';
+import { isOriginalUnavailable } from '@/common/availability';
 import { useFileMenuItems } from '@/common/fileMenu';
 
 import { 
   IconMore,
+  IconExclamation,
+  IconPhoto,
   IconHeartFilled,
   IconTag,
   IconBookmark,
@@ -304,6 +312,7 @@ const showVideoPreview = ref(false);
 const isVideoPreviewReady = ref(false);
 const showAnimatedImagePreview = ref(false);
 const isAnimatedImagePreviewReady = ref(false);
+const originalUnavailable = computed(() => isOriginalUnavailable(props.file));
 const isVideoFile = computed(() => props.file?.file_type === 2);
 const isLivePhoto = computed(() => props.file?.media_subtype === 'live_photo' && !!props.file?.live_photo_video_path);
 const isMotionPhoto = computed(() => props.file?.media_subtype === 'motion_photo');
@@ -314,7 +323,7 @@ const rawJpegPairBadge = computed(() => {
 });
 const previewVideoPath = computed(() => isLivePhoto.value ? props.file.live_photo_video_path : props.file?.file_path);
 const canPreviewVideo = computed(() => (
-  (isVideoFile.value || isLivePhoto.value)
+  !originalUnavailable.value && (isVideoFile.value || isLivePhoto.value)
   && !!previewVideoPath.value
   && !isWebViewVideoPlaybackDisabled(previewVideoPath.value)
 ));
@@ -324,7 +333,7 @@ const isAnimatableImageFile = computed(() => ANIMATABLE_IMAGE_EXTENSIONS.has(
 ));
 const isGifFile = computed(() => getFileExtension(props.file?.name || props.file?.file_path || '').toLowerCase() === 'gif');
 const animatedImagePreviewSrc = computed(() => getAssetSrc(props.file?.file_path || '', Number(props.file?.modified_at || 0)));
-const canPreviewAnimatedImage = computed(() => isAnimatableImageFile.value && !!animatedImagePreviewSrc.value);
+const canPreviewAnimatedImage = computed(() => !originalUnavailable.value && isAnimatableImageFile.value && !!animatedImagePreviewSrc.value);
 const isGeometryGridStyle = computed(() => config.settings.grid.style === 2 || config.settings.grid.style === 3);
 const shouldScaleThumbnail = computed(() => config.settings.grid.style === 1 || isGeometryGridStyle.value);
 const thumbnailCornerClass = computed(() => (

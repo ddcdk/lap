@@ -160,9 +160,10 @@
               </div>
             </div>
 
-            <div class="flex flex-col overflow-hidden" :class="album.is_accessible === false ? 'opacity-50' : ''">
-              <div class="overflow-hidden whitespace-pre text-ellipsis">
-                {{ album.name }}
+            <div class="flex flex-col overflow-hidden">
+              <div class="flex min-w-0 items-center gap-1">
+                <span class="truncate whitespace-pre">{{ album.name }}</span>
+                <IconExclamation v-if="album.is_accessible === false" class="size-4 shrink-0 text-warning/70" :aria-label="t('offline.original_unavailable')" />
               </div>
               <div
                 v-if="album.description"
@@ -259,6 +260,7 @@
 
 <script setup lang="ts">
 
+import { resetFileAccessibility } from '@/common/availability';
 import { useToast } from '@/common/toast';
 import { ref, watch, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -276,7 +278,7 @@ import {
   openFolderDialog,
 } from '@/common/utils';
 import { getAlbumQueueIndex, getAlbumScanState, getAlbumScanIcon, shouldAnimateAlbumScanIcon } from '@/common/scanStatus';
-import { getAllAlbums, getAlbumVisibleCounts, getAllAlbumFolders, reorderAlbums, addAlbum, editAlbum, removeAlbum, 
+import { getAllAlbums, getAlbumVisibleCounts, getAllAlbumFolders, reorderAlbums, addAlbum, editAlbum, removeAlbum,
          fetchFolder, expandFinalFolder, getFileThumbById,
          getAlbum, checkAlbumAccessibility, cancelIndexing as cancelIndexingApi, listenIndexProgress, listenIndexFinished, recountAlbum } from '@/common/api';
 import { Album, Folder } from '@/common/types';
@@ -291,6 +293,7 @@ import TButton from '@/components/TButton.vue';
 
 import {
   IconAdd,
+  IconExclamation,
   IconDownload,
   IconMore,
   IconEdit,
@@ -642,8 +645,10 @@ const isAlbumScanning = (albumId: number) =>
 const getAlbumIcon = (album: any) => getAlbumScanIcon(getAlbumStatus(album));
 const shouldAnimateAlbumIcon = (album: any) => shouldAnimateAlbumScanIcon(getAlbumStatus(album));
 const refreshAlbumAccess = async (album: Album) => {
-  album.is_accessible = await checkAlbumAccessibility(album.id);
-  return album.is_accessible;
+  const libraryId = libConfig._libraryId;
+  const available = await checkAlbumAccessibility(album.id);
+  if (libraryId === libConfig._libraryId) album.is_accessible = available;
+  return available;
 };
 
 const openAlbumEdit = async (albumId: number) => {
@@ -838,6 +843,7 @@ onMounted( async () => {
         album.file_types = updatedAlbum.file_types;
         album.small_image_filter = updatedAlbum.small_image_filter;
         album.excluded_folders = updatedAlbum.excluded_folders;
+        album.is_accessible = updatedAlbum.is_accessible ?? album.is_accessible;
         album.total = updatedAlbum.total;
         album.cover_file_id = updatedAlbum.cover_file_id;
         album.last_scan_time = updatedAlbum.last_scan_time;
@@ -874,6 +880,7 @@ onMounted( async () => {
       const album = getAlbumById(albumId);
       if (!album) continue;
 
+      album.is_accessible = updatedAlbum.is_accessible ?? album.is_accessible;
       album.total = updatedAlbum.total;
       album.indexed = updatedAlbum.indexed;
       album.last_scan_time = updatedAlbum.last_scan_time;
@@ -1160,10 +1167,19 @@ const clickAlbum = async (album: Album) => {
     return;
   }
 
+  const libraryId = libConfig._libraryId;
+  const selectionChanged = !isMainSourceActive.value || config.main.sidebarIndex !== SIDEBAR.ALBUM
+    || selection.albumId.value !== album.id || !selection.selected.value;
   selection.selectAlbum(album);
   requestAnimationFrame(() => {
     setTimeout(async () => {
+      const previous = album.is_accessible;
       const isAccessible = await refreshAlbumAccess(album);
+      if (libraryId !== libConfig._libraryId) return;
+      const clearedUnavailable = resetFileAccessibility(album.path);
+      if (previous !== isAccessible || clearedUnavailable) {
+        await tauriEmit('album-accessibility-changed', { albumId: album.id, rootPath: album.path, available: isAccessible, libraryId, selectionChanged });
+      }
       if (!isAccessible) {
         if (!album.children) await loadCachedAlbumTree(album);
       } else if (!album.children) {

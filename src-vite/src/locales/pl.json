@@ -224,6 +224,10 @@
       }
     }
   },
+  "offline": {
+    "original_unavailable": "Oryginalny plik jest niedostępny",
+    "requires_original": "Wymaga oryginalnego pliku. Podłącz ponownie urządzenie pamięci masowej."
+  },
   "import_organize": {
     "section_folders": "Wybierz folder",
     "section_status": "Stan importu",

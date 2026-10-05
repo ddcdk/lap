@@ -2373,6 +2373,17 @@ pub(crate) fn delete_files_grouped(
         aae_sidecars: Vec<String>,
     }
 
+    // Preflight the entire selection before changing disk or catalog entries.
+    for file in &files {
+        if !t_utils::file_accessible(&file.file_path) {
+            return Err(format!("original_unavailable: {}", file.file_path));
+        }
+        for component in AFile::live_photo_component_files(file.file_id)? {
+            if let Some(path) = component.file_path {
+                if !t_utils::file_accessible(&path) { return Err(format!("original_unavailable: {}", path)); }
+            }
+        }
+    }
     let mut delete_groups = Vec::with_capacity(files.len());
     let mut seen_ids = HashSet::new();
     let mut seen_aae_paths = HashSet::new();
@@ -2497,7 +2508,15 @@ pub async fn get_file_thumb(
     raw_display_options: RawDisplayOptions,
     force_regenerate: bool,
     thumbnail_seek_percent: Option<u8>,
+    album_id: Option<i64>,
 ) -> Result<Option<AThumb>, String> {
+    let album_id = match album_id.filter(|id| *id > 0) {
+        Some(id) => id,
+        None => AFile::get_file_info(file_id)
+            .map_err(|e| format!("Error while getting file info for thumbnail: {}", e))?
+            .and_then(|file| file.album_id)
+            .unwrap_or(0),
+    };
     if let Some(thumb) = AThumb::get_thumb_if_available(
         file_id,
         file_path,
@@ -2505,16 +2524,12 @@ pub async fn get_file_thumb(
         orientation,
         raw_display_options,
         force_regenerate,
+        t_utils::album_accessible(album_id),
     )
     .map_err(|e| format!("Error while getting thumbnail: {}", e))?
     {
         return Ok(Some(thumb));
     }
-
-    let album_id = AFile::get_file_info(file_id)
-        .map_err(|e| format!("Error while getting file info for thumbnail: {}", e))?
-        .and_then(|file| file.album_id)
-        .unwrap_or(0);
 
     AThumb::schedule_background_generation_for_library(
         app_handle,
@@ -2561,6 +2576,7 @@ pub async fn get_file_thumb_by_id(
         orientation,
         raw_display_options,
         force_regenerate,
+        file.album_accessible,
     )
     .map_err(|e| format!("Error while getting thumbnail: {}", e))?
     {
@@ -2645,6 +2661,17 @@ pub async fn get_file_thumbs(
             continue;
         };
 
+        // Offline browsing, including a forced refresh, only reads local cache.
+        if !t_utils::album_accessible(album_id) {
+            let thumb = match fetched_thumbs.remove(&request.file_id) {
+                Some(thumb) => Some(thumb),
+                None => AThumb::fetch(request.file_id)
+                    .map_err(|e| format!("Error while fetching offline thumbnail: {}", e))?,
+            };
+            thumbs.push(thumb);
+            continue;
+        }
+
         if let Some(fetched_thumb) = fetched_thumbs.remove(&request.file_id) {
             if let Some(thumb) = AThumb::resolve_fetched_thumb_if_available(
                 fetched_thumb,
@@ -2654,6 +2681,7 @@ pub async fn get_file_thumbs(
                 raw_display_options,
                 force_regenerate,
                 trust_cached,
+                t_utils::album_accessible(album_id),
             )
             .map_err(|e| format!("Error while getting thumbnail: {}", e))?
             {
@@ -2860,6 +2888,14 @@ pub fn add_file_to_db(folder_id: i64, file_path: &str) -> Result<Option<AFile>, 
 #[tauri::command]
 pub fn check_file_exists(file_path: &str) -> bool {
     Path::new(file_path).exists()
+}
+
+/// Check readability without decoding or modifying the original.
+#[tauri::command]
+pub async fn check_file_accessibility(file_path: String) -> bool {
+    tauri::async_runtime::spawn_blocking(move || t_utils::file_accessible(&file_path))
+        .await
+        .unwrap_or(false)
 }
 
 /// set a file's rotate status

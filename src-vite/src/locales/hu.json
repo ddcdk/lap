@@ -224,6 +224,10 @@
       }
     }
   },
+  "offline": {
+    "original_unavailable": "Az eredeti fájl nem érhető el",
+    "requires_original": "Az eredeti fájl szükséges. Csatlakoztassa újra a tárolóeszközt."
+  },
   "import_organize": {
     "section_folders": "Mappa kiválasztása",
     "section_status": "Importálás állapota",

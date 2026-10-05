@@ -5,6 +5,7 @@ import { defineStore } from 'pinia';
 import { getCurrentLibraryState, saveLibraryState, getAppConfig } from '@/common/api';
 import { CULLING, LIB_ITEM } from '@/common/constants';
 import { setThumbLibraryId } from '@/common/utils';
+import { resetLibraryAccessibility } from '@/common/availability';
 
 // The app-level deep watcher calls save() for every store mutation. Keep the
 // last actual payload per library so runtime-only count refreshes do not turn
@@ -198,6 +199,7 @@ export const useLibraryStore = defineStore('libraryStore', {
      * library's persisted state without a full page reload.
      */
     async reload() {
+      resetLibraryAccessibility();
       this._initialized = false;
       this.$reset();              // Pinia built-in: restore every field to its initial value
       await this.init();          // re-read current library id + state from backend

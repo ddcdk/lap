@@ -1,6 +1,7 @@
+import { setAlbumAccessibility } from '@/common/availability';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { config } from '@/common/config';
+import { config, libConfig } from '@/common/config';
 import { separator, localeComp, formatTimestamp } from '@/common/utils';
 import { getRawDisplayOptions } from './rawDisplay';
 
@@ -308,9 +309,12 @@ export async function getSmartQueryFilePosition(params, fileId) {
 
 // get all albums
 export async function getAllAlbums(refreshAccessibility = false) {
+  const libraryId = libConfig._libraryId;
   try {
     let albums = [];
     const fetchedAlbums = await invoke('get_all_albums', { refreshAccessibility });
+    if (libraryId !== libConfig._libraryId) return null;
+    for (const album of fetchedAlbums || []) setAlbumAccessibility(album.id, album.is_accessible);
     console.log('get_all_albums', fetchedAlbums);
     if (fetchedAlbums) {
       albums = fetchedAlbums.map(album => ({
@@ -370,8 +374,11 @@ export async function getAlbum(albumId) {
 }
 
 export async function checkAlbumAccessibility(albumId) {
+  const libraryId = libConfig._libraryId;
   try {
-    return Boolean(await invoke('check_album_accessibility', { albumId }));
+    const available = Boolean(await invoke('check_album_accessibility', { albumId }));
+    if (libraryId === libConfig._libraryId) setAlbumAccessibility(albumId, available);
+    return available;
   } catch (error) {
     console.error('checkAlbumAccessibility error:', error);
     return false;
@@ -1213,9 +1220,9 @@ export async function editFileComment(fileId, comment) {
 }
 
 // get file thumb
-export async function getFileThumb(fileId, filePath, fileType, orientation, thumbnailSize, forceRegenerate, thumbnailSeekPercent = null) {
+export async function getFileThumb(fileId, filePath, fileType, orientation, thumbnailSize, forceRegenerate, thumbnailSeekPercent = null, albumId = 0) {
   try {
-    const result = await invoke('get_file_thumb', { fileId, filePath, fileType, orientation, thumbnailSize, rawDisplayOptions: getRawDisplayOptions(), forceRegenerate, thumbnailSeekPercent });
+    const result = await invoke('get_file_thumb', { fileId, filePath, fileType, orientation, thumbnailSize, rawDisplayOptions: getRawDisplayOptions(), forceRegenerate, thumbnailSeekPercent, albumId });
     if(result) {
       return result;
     };
@@ -1385,6 +1392,10 @@ export async function checkFileExists(filePath) {
     console.error('Failed to check file exists:', error);
   }
   return false;
+}
+
+export async function checkFileAccessibility(filePath) {
+  return invoke('check_file_accessibility', { filePath });
 }
 
 // set file rotate

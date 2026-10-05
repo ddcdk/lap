@@ -210,11 +210,13 @@ pub fn register_protocols(builder: Builder<Wry>) -> Builder<Wry> {
         })
         .register_asynchronous_uri_scheme_protocol("preview", |_ctx, request, responder| {
             // URL format: preview://localhost/{library_id}/{file_id}?rawPreviewMode=embedded
-            // library_id is for browser cache isolation only; file_id is the last segment
+            // library_id isolates browser caches and guards stale requests after a library switch
             let path = request.uri().path();
             let file_id_str = path.rsplit('/').next().unwrap_or("");
             let file_id: i64 = file_id_str.parse().unwrap_or(0);
             let options = raw_display_options(request.uri().query());
+            let cached_only = request.uri().query().unwrap_or_default().split('&')
+                .any(|param| param == "cachedOnly=true");
             let for_editing = request.uri().query().unwrap_or_default().split('&')
                 .any(|param| param == "forEditing=true");
 
@@ -226,7 +228,8 @@ pub fn register_protocols(builder: Builder<Wry>) -> Builder<Wry> {
                 return;
             }
 
-            let file = match t_sqlite::AFile::get_file_info(file_id) {
+            let library_id = path.trim_start_matches('/').split('/').next().unwrap_or("default");
+            let file = match crate::t_cmds::with_current_library(library_id, || t_sqlite::AFile::get_file_info(file_id)) {
                 Ok(Some(file)) => file,
                 _ => {
                     responder.respond(text_response(http::StatusCode::NOT_FOUND, "file not found"));
@@ -235,7 +238,11 @@ pub fn register_protocols(builder: Builder<Wry>) -> Builder<Wry> {
             };
 
             let is_raw = file.file_type == Some(3);
-            let companion = crate::t_raw_display::paired_file(file_id, RawDisplayOptions { prefer_pair: true, ..options });
+            let companion = if cached_only && file.media_subtype.as_deref() == Some("raw_jpeg_pair") {
+                file.live_photo_video_id.and_then(|id| t_sqlite::AFile::get_file_info(id).ok().flatten())
+            } else {
+                crate::t_raw_display::paired_file(file_id, RawDisplayOptions { prefer_pair: true, ..options })
+            };
             let file_path = match file.file_path {
                 Some(path) if !path.is_empty() => path,
                 _ => {
@@ -248,6 +255,19 @@ pub fn register_protocols(builder: Builder<Wry>) -> Builder<Wry> {
             };
 
             tauri::async_runtime::spawn(async move {
+                if cached_only {
+                    let paired_cache = options.prefer_pair.then(|| companion.as_ref()
+                        .and_then(|file| file.file_path.as_deref())
+                        .and_then(|path| t_image::get_cached_preview_bytes(path, options))).flatten();
+                    let data = paired_cache.or_else(|| t_image::get_cached_preview_bytes(&file_path, options));
+                    let mut response = match data {
+                        Some(data) => image_response(data),
+                        None => text_response(http::StatusCode::NOT_FOUND, "cached preview not found"),
+                    };
+                    response.headers_mut().insert(http::header::CACHE_CONTROL, http::HeaderValue::from_static("no-store"));
+                    responder.respond(response);
+                    return;
+                }
                 if for_editing {
                     // Use exactly the same pixels (including decoder fallbacks)
                     // that get_edited_image applies the crop and adjustments to.

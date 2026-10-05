@@ -224,6 +224,10 @@
       }
     }
   },
+  "offline": {
+    "original_unavailable": "原始檔案暫時無法存取",
+    "requires_original": "需要原始檔案，請連接儲存裝置後使用此操作。"
+  },
   "import_organize": {
     "section_folders": "選擇資料夾",
     "section_status": "匯入狀態",

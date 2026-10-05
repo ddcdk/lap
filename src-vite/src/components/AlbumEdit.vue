@@ -32,6 +32,7 @@
               :value="selectedFolder"
               class="w-full bg-transparent border-none p-0 text-[12px] text-base-content/70 focus:border-none focus:ring-0 focus:outline-none"
             />
+            <IconExclamation v-if="!isNewAlbum && album?.is_accessible === false" class="size-4 shrink-0 text-warning/70" :aria-label="t('offline.original_unavailable')" />
             <button v-if="selectedFolder === ''"
               class="btn btn-primary btn-sm rounded-box"
               @click="clickSelectFolder"
@@ -44,12 +45,6 @@
               :selected="true"
               @click="clickSelectFolder"
             />
-            </div>
-            <div
-              v-if="!isNewAlbum && album?.is_accessible === false"
-              class="text-[11px] leading-4 text-warning"
-            >
-              {{ $t('album.folder_unavailable.title') }}
             </div>
           </div>
 
@@ -290,7 +285,7 @@ import { getAlbumScanState } from '@/common/scanStatus';
 import ModalDialog from '@/components/ModalDialog.vue';
 import TButton from '@/components/TButton.vue';
 import InfoTooltip from '@/components/InfoTooltip.vue';
-import { IconEdit, IconNewFolder, IconFolder, IconSearch, IconClose } from '@/common/icons';
+import { IconEdit, IconNewFolder, IconFolder, IconSearch, IconClose, IconExclamation } from '@/common/icons';
 
 const props = defineProps({
   busy: { type: Boolean, default: false },

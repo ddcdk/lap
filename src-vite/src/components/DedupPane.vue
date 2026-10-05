@@ -175,11 +175,13 @@
                 @keydown.space.self.prevent="handleSimilarSelection(item.file_id)"
               >
                 <div class="flex items-center gap-2">
-                  <label v-if="item.is_keep !== 1" class="flex items-center cursor-pointer shrink-0" @click.stop @dblclick.stop>
+                  <label v-if="item.is_keep !== 1" class="flex items-center shrink-0" :class="isOriginalUnavailable(item.file) ? 'cursor-not-allowed' : 'cursor-pointer'" @click.stop @dblclick.stop>
                     <input
                       type="checkbox"
-                      class="checkbox checkbox-xs checkbox-primary opacity-70"
+                      class="checkbox checkbox-xs disabled:cursor-not-allowed"
+                      :class="isOriginalUnavailable(item.file) ? 'opacity-30' : 'checkbox-primary opacity-70'"
                       :checked="isSimilarSelected(activeSimilarGroup.id, item.file_id)"
+                      :disabled="isOriginalUnavailable(item.file)"
                       @change="toggleSimilarSelected(activeSimilarGroup.id, item.file_id)"
                     />
                   </label>
@@ -189,7 +191,10 @@
                     <div v-else class="w-full h-full skeleton"></div>
                   </div>
                   <div class="min-w-0 flex-1">
-                    <div class="text-xs font-semibold text-base-content/70 truncate">{{ item.file?.name }}</div>
+                    <div class="flex items-center gap-1 text-xs font-semibold text-base-content/70">
+                      <span class="truncate">{{ item.file?.name }}</span>
+                      <IconExclamation v-if="isOriginalUnavailable(item.file)" class="w-3.5 h-3.5 shrink-0 text-warning" />
+                    </div>
                     <div class="text-[11px] text-base-content/30 truncate">
                       <template v-if="item.file?.width && item.file?.height">
                         {{ item.file.width }} × {{ item.file.height }}
@@ -296,7 +301,7 @@
             class="ml-auto"
             :icon="IconTrash"
             danger
-            :disabled="totalDuplicateFileCount === 0"
+            :disabled="totalDuplicateFileCount === 0 || duplicateAccessPending || hasUnavailableDuplicates"
             @click="trashAllDuplicates"
           >
             {{ $t('info_panel.dedup.delete_all') }}
@@ -405,11 +410,13 @@
               @keydown.space.self.prevent="handleDuplicateSelection(item.file_id)"
             >
               <div class="flex items-center gap-2">
-                <label v-if="item.is_keep !== 1" class="flex items-center cursor-pointer shrink-0" @click.stop @dblclick.stop>
+                <label v-if="item.is_keep !== 1" class="flex items-center shrink-0" :class="isOriginalUnavailable(item.file) ? 'cursor-not-allowed' : 'cursor-pointer'" @click.stop @dblclick.stop>
                   <input
                     type="checkbox"
-                    class="checkbox checkbox-xs checkbox-primary opacity-70"
+                    class="checkbox checkbox-xs disabled:cursor-not-allowed"
+                    :class="isOriginalUnavailable(item.file) ? 'opacity-30' : 'checkbox-primary opacity-70'"
                     :checked="isDupSelected(activeGroup.id, item.file_id)"
+                    :disabled="isOriginalUnavailable(item.file)"
                     @change="toggleDupSelected(activeGroup.id, item.file_id)"
                   />
                 </label>
@@ -419,7 +426,10 @@
                   <div v-else class="w-full h-full skeleton"></div>
                 </div>
                 <div class="min-w-0 flex-1">
-                  <div class="text-xs font-semibold text-base-content/70 truncate">{{ item.file?.name }}</div>
+                  <div class="flex items-center gap-1 text-xs font-semibold text-base-content/70">
+                    <span class="truncate">{{ item.file?.name }}</span>
+                    <IconExclamation v-if="isOriginalUnavailable(item.file)" class="w-3.5 h-3.5 shrink-0 text-warning" />
+                  </div>
                   <div
                     class="text-[11px] text-base-content/30 truncate"
                     :title="formatDedupFolderPath(item.file)"
@@ -479,7 +489,7 @@ import {
 import TButton from '@/components/TButton.vue';
 import PanelActionButton from '@/components/PanelActionButton.vue';
 import MessageBox from '@/components/MessageBox.vue';
-import { IconChecked, IconUnChecked, IconClose, IconFlag, IconFlagFilled, IconFlagOff, IconLock, IconRefresh, IconSplitOn, IconSplitOn4, IconTrash, IconUnlock } from '@/common/icons';
+import { IconChecked, IconExclamation, IconUnChecked, IconClose, IconFlag, IconFlagFilled, IconFlagOff, IconLock, IconRefresh, IconSplitOn, IconSplitOn4, IconTrash, IconUnlock } from '@/common/icons';
 import {
   dedupStartScan,
   dedupCancelScan,
@@ -490,6 +500,7 @@ import {
   dedupSetKeep,
   getAlbum,
   getFileThumb,
+  checkFileAccessibility,
   similarStartScan,
   similarGetScanStatus,
   similarCancelScan,
@@ -502,7 +513,8 @@ import {
   listenSimilarScanProgress,
   setFileCullingFlag,
 } from '@/common/api';
-import { config } from '@/common/config';
+import { config, libConfig } from '@/common/config';
+import { isOriginalUnavailable, setFileAccessibility } from '@/common/availability';
 import { SIMILAR_SCAN } from '@/common/constants';
 
 const dedupPaneGlobalState = ((globalThis as any).__lapDedupPaneState ||= {
@@ -674,8 +686,14 @@ function getDupSelectedSet(groupId: number): Set<number> {
   return set;
 }
 
+const duplicateFilesById = computed(() => new Map<number, any>(rawGroups.value.flatMap((group: any) =>
+  (group.items || []).map((item: any) => [Number(item.file_id), item.file] as [number, any]))));
+const similarFilesById = computed(() => new Map<number, any>(similarGroups.value.flatMap((group: any) =>
+  (group.items || []).map((item: any) => [Number(item.file_id), item.file] as [number, any]))));
+
 function isDupSelected(groupId: number, fileId: number) {
-  return getDupSelectedSet(groupId).has(fileId);
+  return !isOriginalUnavailable(duplicateFilesById.value.get(Number(fileId)))
+    && getDupSelectedSet(groupId).has(fileId);
 }
 
 function getSimilarSelectedSet(groupId: number): Set<number> {
@@ -687,7 +705,8 @@ function getSimilarSelectedSet(groupId: number): Set<number> {
 }
 
 function isSimilarSelected(groupId: number, fileId: number) {
-  return getSimilarSelectedSet(groupId).has(fileId);
+  return !isOriginalUnavailable(similarFilesById.value.get(Number(fileId)))
+    && getSimilarSelectedSet(groupId).has(fileId);
 }
 
 function selectSimilarDuplicatesByDefault(group: any) {
@@ -697,7 +716,7 @@ function selectSimilarDuplicatesByDefault(group: any) {
     groupId,
     new Set(
       (group.items || [])
-        .filter((item: any) => item.is_keep !== 1)
+        .filter((item: any) => item.is_keep !== 1 && !isOriginalUnavailable(item.file))
         .map((item: any) => Number(item.file_id)),
     ),
   );
@@ -729,6 +748,7 @@ async function setSimilarCullingFlag(item: any, cullingFlag: number) {
 }
 
 function toggleSimilarSelected(groupId: number, fileId: number) {
+  if (isOriginalUnavailable(similarFilesById.value.get(Number(fileId)))) return;
   const selected = getSimilarSelectedSet(groupId);
   if (selected.has(fileId)) selected.delete(fileId);
   else selected.add(fileId);
@@ -736,7 +756,7 @@ function toggleSimilarSelected(groupId: number, fileId: number) {
 
 function isAllSimilarItemsSelected(groupId: number) {
   if (!activeSimilarGroup.value?.items?.length || activeSimilarGroup.value.id !== groupId) return false;
-  const unkeptItems = activeSimilarGroup.value.items.filter((item: any) => item.is_keep !== 1);
+  const unkeptItems = activeSimilarGroup.value.items.filter((item: any) => item.is_keep !== 1 && !isOriginalUnavailable(item.file));
   if (unkeptItems.length === 0) return false;
   const selected = getSimilarSelectedSet(groupId);
   return unkeptItems.every((item: any) => selected.has(Number(item.file_id)));
@@ -752,18 +772,17 @@ function selectAllSimilarItems(group: any) {
   }
   selected.clear();
   for (const item of group.items || []) {
-    if (item.is_keep !== 1) selected.add(Number(item.file_id));
+    if (item.is_keep !== 1 && !isOriginalUnavailable(item.file)) selected.add(Number(item.file_id));
   }
 }
 
 function compareSelectedSimilarPhotos() {
   if (!activeSimilarGroup.value) return;
-  const selected = getSimilarSelectedSet(activeSimilarGroup.value.id);
   const keepItem = activeSimilarGroup.value.items.find((item: any) => item.is_keep === 1);
   if (!keepItem?.file) return;
   const files = [keepItem.file]
     .concat(activeSimilarGroup.value.items
-    .filter((item: any) => item.is_keep !== 1 && selected.has(Number(item.file_id)))
+    .filter((item: any) => item.is_keep !== 1 && isSimilarSelected(activeSimilarGroup.value.id, item.file_id))
       .map((item: any) => item.file)
     )
     .filter(Boolean);
@@ -776,7 +795,7 @@ function trashSelectedSimilar(groupId: number, reclaimableBytes: number) {
       .filter((item: any) => item.is_keep === 1)
       .map((item: any) => Number(item.file_id)),
   );
-  const fileIds = Array.from(getSimilarSelectedSet(groupId)).filter(fileId => !keptIds.has(fileId));
+  const fileIds = Array.from(getSimilarSelectedSet(groupId)).filter(fileId => !keptIds.has(fileId) && isSimilarSelected(groupId, fileId));
   if (fileIds.length > 0) emit('trash-selected-similar', String(groupId), fileIds, reclaimableBytes);
 }
 
@@ -793,6 +812,7 @@ function getDedupItemClass(fileId: number, isDuplicateSelected = false) {
 }
 
 function toggleDupSelected(groupId: number, fileId: number) {
+  if (isOriginalUnavailable(duplicateFilesById.value.get(Number(fileId)))) return;
   const set = getDupSelectedSet(groupId);
   if (set.has(fileId)) set.delete(fileId);
   else set.add(fileId);
@@ -810,6 +830,26 @@ function handleSimilarSelection(fileId: number, preview = false) {
   if (preview) emit('preview-file', fileId);
 }
 
+let unlistenAlbumAccessChanged: (() => void) | undefined;
+const duplicateAccessPending = ref(false);
+const hasUnavailableDuplicates = computed(() => rawGroups.value.some((group: any) =>
+  (group.items || []).some((item: any) => item.is_keep !== 1 && isOriginalUnavailable(item.file))));
+
+async function refreshFileAccess(files: any[]) {
+  const libraryId = libConfig._libraryId;
+  const unique = [...new Map(files.filter(file => file?.file_path && file.album_accessible !== false)
+    .map(file => [file.file_path, file])).values()];
+  for (let i = 0; i < unique.length; i += 8) {
+    await Promise.all(unique.slice(i, i + 8).map(async file => {
+      try {
+        const available = await checkFileAccessibility(file.file_path);
+        if (libraryId === libConfig._libraryId) setFileAccessibility(file.file_path, available);
+      } catch { /* Keep the last known state on IPC errors. */ }
+    }));
+    if (libraryId !== libConfig._libraryId) return;
+  }
+}
+
 async function hydrateSimilarThumbnails(groups: any[], activeGroupId: number | null) {
   const visibleIds = new Set(
     visibleSimilarGroups.value.map(group => Number(group.id))
@@ -818,6 +858,8 @@ async function hydrateSimilarThumbnails(groups: any[], activeGroupId: number | n
     if (Number(group.id) === activeGroupId) return [group.representative, ...(group.items || []).map((item: any) => item.file)];
     return visibleIds.has(Number(group.id)) ? [group.representative] : [];
   }).filter(Boolean);
+  await refreshFileAccess(groups.flatMap(group => Number(group.id) === activeGroupId
+    ? (group.items || []).map((item: any) => item.file) : []));
   await Promise.all(files.map(async (file: any) => {
     if (file.thumbnail || !file.file_path) return;
     const thumb = await getFileThumb(
@@ -827,6 +869,8 @@ async function hydrateSimilarThumbnails(groups: any[], activeGroupId: number | n
       file.e_orientation || 0,
       config.settings.thumbnailSize,
       false,
+      null,
+      file.album_id || 0,
     );
     file.thumbnail = getThumbnailDataUrl(thumb, thumbnailPlaceholder, false, config.settings.thumbnailSize, file.file_path, Number(file.modified_at || 0));
   }));
@@ -1127,7 +1171,7 @@ function selectGroupDuplicates(groupId: number, keepFileId: number) {
   if (!group) return;
 
   const set = getDupSelectedSet(groupId);
-  const duplicateIds = group.duplicateItems.map((item: any) => item.file_id);
+  const duplicateIds = group.duplicateItems.filter((item: any) => !isOriginalUnavailable(item.file)).map((item: any) => item.file_id);
   const allSelected = duplicateIds.length > 0 && duplicateIds.every((id: number) => set.has(id));
 
   if (allSelected) {
@@ -1145,18 +1189,28 @@ function isAllGroupDuplicatesSelected(groupId: number) {
   const group = duplicateGroups.value.find(g => g.id === groupId);
   if (!group || group.duplicateItems.length === 0) return false;
   const set = getDupSelectedSet(groupId);
-  return group.duplicateItems.every((item: any) => set.has(item.file_id));
+  const available = group.duplicateItems.filter((item: any) => !isOriginalUnavailable(item.file));
+  return available.length > 0 && available.every((item: any) => set.has(item.file_id));
 }
 
 function trashSelectedDuplicates(groupId: number, reclaimableBytes: number) {
-  const ids = Array.from(getDupSelectedSet(groupId).values());
+  const ids = Array.from(getDupSelectedSet(groupId).values()).filter(fileId => isDupSelected(groupId, fileId));
   if (ids.length === 0) return;
   emit('trash-selected-duplicates', String(groupId), ids, reclaimableBytes);
 }
 
-function trashAllDuplicates() {
-  if (totalDuplicateFileCount.value <= 0) return;
-  emit('trash-all-duplicates', totalDuplicateFileCount.value, totalReclaimableBytes.value);
+async function trashAllDuplicates() {
+  if (totalDuplicateFileCount.value <= 0 || duplicateAccessPending.value || hasUnavailableDuplicates.value) return;
+  const libraryId = libConfig._libraryId;
+  duplicateAccessPending.value = true;
+  try {
+    await refreshFileAccess(rawGroups.value.flatMap((group: any) => (group.items || [])
+      .filter((item: any) => item.is_keep !== 1).map((item: any) => item.file)));
+    if (libraryId !== libConfig._libraryId || hasUnavailableDuplicates.value) return;
+    emit('trash-all-duplicates', totalDuplicateFileCount.value, totalReclaimableBytes.value);
+  } finally {
+    duplicateAccessPending.value = false;
+  }
 }
 
 function applyDeletedFiles(groupId: number, deletedFileIds: number[]) {
@@ -1274,6 +1328,8 @@ async function hydrateAlbumRootPaths(groups: any[]) {
 }
 
 async function hydrateGroupThumbnails(groups: any[], activeGroupId: number | null) {
+  await refreshFileAccess(groups.flatMap(group => Number(group.id) === activeGroupId
+    ? (group.items || []).map((item: any) => item.file) : []));
   const tasks: Promise<void>[] = [];
   const visibleGroupIds = new Set(
     (groups || []).slice(0, loadedDuplicateGroupCount.value).map((group: any) => Number(group.id))
@@ -1303,7 +1359,9 @@ async function hydrateGroupThumbnails(groups: any[], activeGroupId: number | nul
           file.file_type || 1,
           file.e_orientation || 0,
           config.settings.thumbnailSize,
-          false
+          false,
+          null,
+          file.album_id || 0,
         );
         file.thumbnail = getThumbnailDataUrl(thumb, thumbnailPlaceholder, false, config.settings.thumbnailSize, file.file_path, Number(file.modified_at || 0));
       })());
@@ -1325,6 +1383,7 @@ async function refreshOverview() {
 }
 
 async function fetchGroups(preferredGroupId: number | null = null) {
+  duplicateAccessPending.value = true;
   try {
     const groups = await dedupListGroups(1, 0, 'count_desc', 'all');
     const normalized = Array.isArray(groups) ? groups : [];
@@ -1357,7 +1416,7 @@ async function fetchGroups(preferredGroupId: number | null = null) {
       if (!selectedDupIdsByGroup.value.has(groupId)) {
         const set = new Set<number>();
         for (const item of (group.items || [])) {
-          if (item.is_keep !== 1) {
+          if (item.is_keep !== 1 && !isOriginalUnavailable(item.file)) {
             set.add(Number(item.file_id));
           }
         }
@@ -1372,6 +1431,8 @@ async function fetchGroups(preferredGroupId: number | null = null) {
   } catch (error) {
     console.error('fetchGroups error:', error);
     showDedupScanError();
+  } finally {
+    duplicateAccessPending.value = false;
   }
 }
 
@@ -1609,6 +1670,20 @@ watch(selectedSimilarGroupId, async (groupId, prevGroupId) => {
 });
 
 onMounted(async () => {
+  unlistenAlbumAccessChanged = await listen('album-accessibility-changed', async (event: any) => {
+    const { libraryId, albumId, available } = event.payload || {};
+    if (libraryId !== libConfig._libraryId) return;
+    for (const group of [...rawGroups.value, ...similarGroups.value]) {
+      for (const file of [group.representative, ...(group.items || []).map((item: any) => item.file)]) {
+        if (file && Number(file.album_id) === Number(albumId)) file.album_accessible = available;
+      }
+    }
+    if (activeTab.value === 'similar') {
+      await hydrateSimilarThumbnails(similarGroups.value, selectedSimilarGroupId.value);
+    } else {
+      await hydrateGroupThumbnails(rawGroups.value, selectedGroupId.value);
+    }
+  });
   await nextTick();
 
   unlistenDedupProgress.value = await listenDedupScanProgress(async (event: any) => {
@@ -1667,6 +1742,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  unlistenAlbumAccessChanged?.();
   stopDedupStatusPolling();
   stopDraggingDuplicateSplitter();
   if (unlistenDedupProgress.value) {

@@ -224,6 +224,10 @@
       }
     }
   },
+  "offline": {
+    "original_unavailable": "Оригінальний файл недоступний",
+    "requires_original": "Потрібен оригінальний файл. Підключіть пристрій зберігання знову."
+  },
   "import_organize": {
     "section_folders": "Виберіть теку",
     "section_status": "Стан імпорту",
