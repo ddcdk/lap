@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "Сітка різкості в навігаторі",
+    "sharpness_grid_hint": "Виділяє різкі ділянки в навігаторі.",
     "live": "LIVE",
     "motion": "MOTION",
     "title": "Перегляд зображень",

@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "Schärferaster im Navigator",
+    "sharpness_grid_hint": "Scharfe Bereiche im Navigator hervorheben.",
     "live": "LIVE",
     "motion": "MOTION",
     "title": "Bildanzeige",

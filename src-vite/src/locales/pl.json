@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "Siatka ostrości w nawigatorze",
+    "sharpness_grid_hint": "Wyróżnia ostre obszary w nawigatorze.",
     "live": "LIVE",
     "motion": "MOTION",
     "title": "Przeglądarka zdjęć",

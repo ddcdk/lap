@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "Grille de netteté du navigateur",
+    "sharpness_grid_hint": "Indique les zones nettes dans le navigateur.",
     "live": "LIVE",
     "motion": "MOTION",
     "title": "Visionneuse d’images",

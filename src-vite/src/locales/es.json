@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "Cuadrícula de nitidez del navegador",
+    "sharpness_grid_hint": "Resalta las zonas nítidas en el navegador.",
     "live": "EN VIVO",
     "motion": "MOTION",
     "title": "Visor de imagenes",

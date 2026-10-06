@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "导航器清晰度网格",
+    "sharpness_grid_hint": "在导航器中标出清晰区域。",
     "live": "实况",
     "motion": "动态",
     "title": "图像查看器",

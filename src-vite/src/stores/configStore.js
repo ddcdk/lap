@@ -160,6 +160,7 @@ export const useConfigStore = defineStore('configStore', {
       slideShowTransition: 0,    // 0: Slide, 1: Fade, 2: None
       navigatorViewMode: 0,      // 0: Auto, 1: Always show, 2: Always hide
       navigatorViewSize: 240,    // navigator view size (160, 240, 320, 400)
+      navigatorSharpnessGrid: false,
       viewBackground: 0,         // 0: default, 1: black, 2: dark gray, 3: medium gray, 4: light gray, 5: white
       autoPlayVideo: true,       // auto play video
       loopVideo: false,          // loop video (only effective when autoPlayVideo is off)

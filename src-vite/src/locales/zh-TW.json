@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "導航器清晰度網格",
+    "sharpness_grid_hint": "在導航器中標示清晰區域。",
     "live": "LIVE",
     "motion": "MOTION",
     "title": "圖片檢視器",
@@ -1419,13 +1421,13 @@
         "上/下一張相片（Ctrl 縮放）",
         "放大 / 縮小"
       ],
-      "navigator_view": "導覽器",
+      "navigator_view": "導航器",
       "navigator_view_options": [
         "自動",
         "一律顯示",
         "一律隱藏"
       ],
-      "navigator_view__size": "導覽器大小",
+      "navigator_view__size": "導航器大小",
       "navigator_view_size_options": [
         "小（160 px）",
         "中（240 px）",

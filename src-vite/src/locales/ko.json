@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "내비게이터 선명도 격자",
+    "sharpness_grid_hint": "내비게이터에 선명한 영역을 표시합니다.",
     "live": "라이브",
     "motion": "모션",
     "title": "이미지 뷰어",

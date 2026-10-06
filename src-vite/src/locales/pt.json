@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "Grade de nitidez do navegador",
+    "sharpness_grid_hint": "Realça áreas nítidas no navegador.",
     "live": "AO VIVO",
     "motion": "MOTION",
     "title": "Visualizador de imagens",

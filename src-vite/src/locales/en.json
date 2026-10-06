@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "Navigator sharpness grid",
+    "sharpness_grid_hint": "Highlight sharp areas in the navigator.",
     "live": "LIVE",
     "motion": "MOTION",
     "title": "Image viewer",

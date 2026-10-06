@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "Griglia di nitidezza del navigatore",
+    "sharpness_grid_hint": "Evidenzia le aree nitide nel navigatore.",
     "live": "LIVE",
     "motion": "MOTION",
     "title": "Visualizzatore immagini",

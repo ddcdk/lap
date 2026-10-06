@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "ナビゲーターのシャープネスグリッド",
+    "sharpness_grid_hint": "ナビゲーターで鮮明な領域を表示します。",
     "live": "ライブ",
     "motion": "モーション",
     "title": "画像ビューア",

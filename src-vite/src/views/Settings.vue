@@ -250,6 +250,13 @@
                   <option v-for="(option, index) in navigatorViewSizeOptions" :key="index" :value="option.value">{{ option.label }}</option>
               </select>
             </div>
+            <label class="flex items-center justify-between px-1 rounded-box hover:bg-base-100/10 transition-colors duration-200">
+              <span class="flex flex-col gap-0.5 text-sm leading-5">
+                <span>{{ $t('image_viewer.sharpness_grid') }}</span>
+                <span class="text-xs text-base-content/30">{{ $t('image_viewer.sharpness_grid_hint') }}</span>
+              </span>
+              <input type="checkbox" class="toggle toggle-primary toggle-sm" v-model="config.settings.navigatorSharpnessGrid" />
+            </label>
           </div>
 
           <!-- view -->
@@ -1492,6 +1499,9 @@ watch(() => config.settings.navigatorViewMode, (newValue) => {
 });
 watch(() => config.settings.navigatorViewSize, (newValue) => {
   emit('settings-navigatorViewSize-changed', newValue);
+});
+watch(() => config.settings.navigatorSharpnessGrid, (newValue) => {
+  emit('settings-navigatorSharpnessGrid-changed', newValue);
 });
 watch(() => config.settings.viewBackground, (newValue) => {
   emit('settings-viewBackground-changed', newValue);

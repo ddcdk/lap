@@ -160,6 +160,7 @@
     <transition name="fade">
       <!-- nav container -->
       <div v-if="showNavigator"
+        data-image-navigator
         class="absolute right-4 bottom-4 outline outline-gray-50 overflow-hidden shadow-lg shadow-gray-500 z-20" 
         :style="navContainerStyle"
         @mouseenter="pauseNavigatorAutoHide"
@@ -170,6 +171,13 @@
       >
         <!-- nav image -->
         <img :src="displayThumbnailSrc || imageSrc[activeImage]" :style="navImageStyle" draggable="false" />
+        <SharpnessGrid
+          :source="displayThumbnailSrc || getThumbUrl(props.fileId, false, config.settings.thumbnailSize, props.fileVersion)"
+          :enabled="config.settings.navigatorSharpnessGrid"
+          :width="navContainerSize.width"
+          :height="navContainerSize.height"
+          :rotate="imageRotate[activeImage]"
+        />
         <!-- nav box -->
         <div class="absolute top-0 left-0 border-2 border-primary cursor-move"
           :style="navBoxStyle"
@@ -213,6 +221,7 @@ import { useToast } from '@/common/toast';
 import { checkFileAccessibility } from '@/common/api';
 import { setFileAccessibility } from '@/common/availability';
 import { IconError, IconBrightness } from '@/common/icons';
+import SharpnessGrid from '@/components/SharpnessGrid.vue';
 
 const { t } = useI18n();
 const toast = useToast();

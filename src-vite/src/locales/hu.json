@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "Navigátor élességi rácsa",
+    "sharpness_grid_hint": "Éles területek kiemelése a navigátorban.",
     "live": "LIVE",
     "motion": "MOTION",
     "title": "Képnézegető",

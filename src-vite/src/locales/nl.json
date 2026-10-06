@@ -1190,6 +1190,8 @@
     }
   },
   "image_viewer": {
+    "sharpness_grid": "Scherpteraster in de navigator",
+    "sharpness_grid_hint": "Markeer scherpe gebieden in de navigator.",
     "live": "LIVE",
     "motion": "MOTION",
     "title": "Fotoviewer",

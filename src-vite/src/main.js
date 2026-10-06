@@ -201,6 +201,9 @@ if (isMainWindow) {
   listen('settings-navigatorViewSize-changed', (event) => {
     config.setNavigatorViewSize(event.payload)
   })
+  listen('settings-navigatorSharpnessGrid-changed', (event) => {
+    config.settings.navigatorSharpnessGrid = event.payload
+  })
   listen('settings-viewBackground-changed', (event) => {
     config.setViewBackground(event.payload)
   })
