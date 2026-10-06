@@ -306,7 +306,7 @@ import {
   IconTag,
   IconTagAdd,
   IconRight,
-  IconEdit,
+  IconRename,
   IconOrder,
   IconTrash,
   IconDragHandle,
@@ -565,7 +565,7 @@ function groupMenu(group: TagGroup) {
     { label: "-", action: null },
     {
       label: t("menu.tag.rename"),
-      icon: IconEdit,
+      icon: IconRename,
       disabled: group.is_default,
       action: () => {
         if (!group.is_default) startRename("group", group);
@@ -633,7 +633,7 @@ function tagMenu(tag: LibraryTag) {
   return [
     {
       label: t("menu.tag.rename"),
-      icon: IconEdit,
+      icon: IconRename,
       action: () => {
         startRename("tag", tag);
       },

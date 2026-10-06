@@ -16,6 +16,7 @@
       <div v-if="child.id != 0 || selection.folderPath.value == rootPath"
         :data-file-drop-path="unavailable || isFolderUnavailable(child.path) ? undefined : child.path"
         :data-file-drop-album-id="unavailable || isFolderUnavailable(child.path) ? undefined : albumId"
+        class="group/folder"
         :class="folderClass(child)"
         @click="clickFolder(albumId, child)"
         @dblclick="!isFolderFiltering && expandFolder(child)"
@@ -57,7 +58,7 @@
           @click.stop
           @mousedown.stop
           @keydown.enter = "clickRenameFolder(child.name)"
-          @keydown.esc = "handleEscKey($event, String(child.id))"
+          @keydown.esc.stop = "handleEscKey($event, String(child.id))"
           @blur = "clickRenameFolder(child.name)"
         > 
         <template v-else>
@@ -68,7 +69,7 @@
           <div class="ml-auto flex flex-row items-center text-base-content/30">
             <IconHeartFilled v-if="child.is_favorite" class="mr-1 w-4 h-4 shrink-0 text-primary/70" />
             <span
-              v-if="getFolderFileCount(child.path) > 0"
+              v-if="!showFolderActions && getFolderFileCount(child.path) > 0"
               class="sidebar-item-count shrink-0"
             >
               {{ getFolderFileCount(child.path).toLocaleString() }}
@@ -80,6 +81,38 @@
               :menuItems="() => getMenuItemsForFolder(child)"
               :smallIcon="true"
             />
+            <div
+              v-if="showFolderActions && !isRenamingFolder && !isCreatingFolder"
+              class="grid min-w-14 ml-1 items-center justify-items-end group/actions"
+              @mousedown.stop
+            >
+              <span
+                v-if="getFolderFileCount(child.path) > 0"
+                class="sidebar-item-count col-start-1 row-start-1 group-hover/folder:invisible group-focus-within/actions:invisible"
+                :class="{ invisible: isSelectedFolder(child) }"
+              >{{ getFolderFileCount(child.path).toLocaleString() }}</span>
+              <div
+                class="col-start-1 row-start-1 flex items-center gap-1 transition-opacity group-hover/folder:opacity-100 group-hover/folder:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto"
+                :class="isSelectedFolder(child) ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+              >
+                <TButton
+                  :icon="IconRename"
+                  buttonSize="small"
+                  buttonClasses="cursor-pointer"
+                  :tooltip="$t('menu.file.rename')"
+                  :disabled="unavailable || isFolderUnavailable(child.path)"
+                  @click.stop="startRenameFolder(child)"
+                />
+                <TButton
+                  :icon="IconTrash"
+                  buttonSize="small"
+                  buttonClasses="cursor-pointer hover:bg-error/10! hover:text-error!"
+                  :tooltip="$t('menu.file.delete')"
+                  :disabled="unavailable || isFolderUnavailable(child.path) || child.path === rootPath"
+                  @click.stop="startDeleteFolder(child)"
+                />
+              </div>
+            </div>
           </div>
         </template>
       </div>
@@ -89,6 +122,7 @@
         :albumId="albumId"
         :rootPath="rootPath"
         :allowContextMenu="allowContextMenu"
+        :showFolderActions="showFolderActions"
         :unavailable="unavailable"
         :treeRoot="false"
         :filterVisiblePaths="filterVisiblePaths"
@@ -147,7 +181,7 @@
 
 <script setup lang="ts">
 
-import { ref, nextTick, computed, inject, provide } from 'vue';
+import { ref, nextTick, computed, inject, provide, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useUIStore } from '@/stores/uiStore';
 import { config, libConfig } from '@/common/config';
@@ -163,6 +197,7 @@ import { getFolderFileCount, useAlbumSelection } from '@/composables/useAlbumSel
 
 import AlbumFolder from '@/components/AlbumFolder.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
+import TButton from '@/components/TButton.vue';
 import MoveTo from '@/components/MoveTo.vue';
 import MessageBox from '@/components/MessageBox.vue';
 import FileConflictDialog from '@/components/FileConflictDialog.vue';
@@ -196,6 +231,7 @@ const props = withDefaults(defineProps<{
   albumId: number;          // album id for this folder tree
   rootPath: string;         // root folder path (album path)
   allowContextMenu?: boolean; // whether to show context menu
+  showFolderActions?: boolean;
   treeRoot?: boolean;       // only root tree listens to keyboard
   filterVisiblePaths?: string[];
   filterMatchedPaths?: string[];
@@ -319,6 +355,32 @@ let fileConflictResolver: ((policy: FileConflictPolicy) => void) | null = null;
 
 const toast = useToast();
 const treeRootRef = ref<HTMLElement | null>(null);
+let disposed = false;
+
+async function startRenameFolder(folder: Folder) {
+  if (isRenamingFolder.value || isCreatingFolder.value || props.unavailable) return;
+  if (!await isDirectoryAccessible(folder.path)) return;
+  if (disposed) return;
+  await clickFolder(props.albumId, folder);
+  if (disposed || selection.folderPath.value !== folder.path) return;
+  originalFolderName.value = folder.name;
+  isRenamingFolder.value = true;
+  uiStore.pushInputHandler('AlbumFolder-rename');
+  await nextTick();
+  const input = Array.isArray(folderInputRef.value) ? folderInputRef.value[0] : folderInputRef.value;
+  input?.focus();
+  input?.select();
+}
+
+async function startDeleteFolder(folder: Folder) {
+  if (isRenamingFolder.value || isCreatingFolder.value || props.unavailable || folder.path === props.rootPath) return;
+  if (!await isDirectoryAccessible(folder.path)) return;
+  if (disposed) return;
+  await clickFolder(props.albumId, folder);
+  if (disposed || selection.folderPath.value !== folder.path) return;
+  deletePermanently.value = permanentDeleteChecked.value;
+  showTrashFolderMsgbox.value = true;
+}
 
 // more menuitems - function that takes the folder being right-clicked
 const getMenuItemsForFolder = async (folder: any) => {
@@ -348,15 +410,7 @@ const getMenuItemsForFolder = async (folder: any) => {
       label: localeMsg.value.menu.file.rename,
       disabled: unavailable,
       icon: IconRename,
-      action: () => {
-        isRenamingFolder.value = true;
-        originalFolderName.value = folder.name;
-        uiStore.pushInputHandler('AlbumFolder-rename');
-        nextTick(() => {
-          const input = Array.isArray(folderInputRef.value) ? folderInputRef.value[0] : folderInputRef.value;
-          input?.focus();
-        });
-      }
+      action: () => { void startRenameFolder(folder); }
     },
     {
       label: t('menu.file.paste'),
@@ -430,10 +484,7 @@ const getMenuItemsForFolder = async (folder: any) => {
       label: localeMsg.value.menu.album.delete_folder,
       icon: IconTrash,
       disabled: unavailable || isRoot,
-      action: () => {
-        deletePermanently.value = permanentDeleteChecked.value;
-        showTrashFolderMsgbox.value = true;
-      }
+      action: () => { void startDeleteFolder(folder); }
     },
   ];
 };
@@ -632,8 +683,9 @@ const handleLocalTreeKeyDown = (event: KeyboardEvent) => {
 
 const focusNewFolderInput = async (select = false) => {
   await nextTick();
-  const input = Array.from(document.querySelectorAll<HTMLInputElement>('input[data-new-folder-path]'))
+  const input = Array.from(treeRootRef.value?.querySelectorAll<HTMLInputElement>('input[data-new-folder-path]') || [])
     .find(element => element.dataset.newFolderPath === creatingFolderPath.value);
+  input?.scrollIntoView({ block: 'nearest' });
   input?.focus();
   if (select) input?.select();
 };
@@ -642,6 +694,7 @@ const startNewFolder = async (folder: Folder) => {
   if (props.unavailable || isFolderUnavailable(folder.path)) return;
   if (isCreatingFolder.value) return;
   const refreshed = await fetchFolder(folder.path, false, config.settings.folderSort);
+  if (disposed) return;
   if (refreshed) {
     folder.children = refreshed.children || [];
     folder.has_subfolders = refreshed.has_subfolders;
@@ -684,6 +737,7 @@ const confirmNewFolder = async () => {
 
   isCreatingFolderRequest.value = true;
   const newFolderPath = await createFolder(parent.path, name);
+  if (disposed) return;
   if (!newFolderPath) {
     isCreatingFolderRequest.value = false;
     toast.error(localeMsg.value.msgbox.new_folder.error);
@@ -692,6 +746,7 @@ const confirmNewFolder = async () => {
   }
 
   const refreshed = await fetchFolder(parent.path, false, config.settings.folderSort);
+  if (disposed) return;
   if (refreshed) {
     parent.children = refreshed.children || [];
     parent.has_subfolders = refreshed.has_subfolders;
@@ -740,6 +795,12 @@ const clickRenameFolder = async (newFolderName: string) => {
 
       isRenamingFolder.value = false;
       uiStore.removeInputHandler('AlbumFolder-rename');
+      if (props.showFolderActions) {
+        await tauriEmit('albums-refreshed', {
+          albums: await getAllAlbums(),
+          renamedFolder: { albumId: props.albumId, oldPath: oldFolderPath, newPath: newFolderPath_ },
+        });
+      }
     }
   }
 };
@@ -1013,6 +1074,12 @@ const clickTrashFolder = async () => {
         ? t('msgbox.permanent_delete.folder_success', { folder: folderName })
         : t('msgbox.move_to_trash.folder_success', { folder: folderName })
     );
+    if (props.showFolderActions) {
+      await selection.expandAndSelectFolder(props.albumId, parentPath);
+      await tauriEmit('albums-refreshed', { albums: await getAllAlbums() });
+      await tauriEmit('library-total-refreshed', { source: 'album-folder' });
+      await tauriEmit('refresh-content');
+    }
   } else {
     toast.error(
       deletePermanently.value
@@ -1052,5 +1119,26 @@ const toggleFolderSearchExcluded = async (folder: Folder) => {
     tauriEmit('library-total-refreshed');
   }
 };
+
+defineExpose({
+  isCreatingFolder,
+  canCreateSelectedFolder: computed(() =>
+    !isRenamingFolder.value && !selection.selected.value && !!selectedFolder.value &&
+    !props.unavailable && !isFolderUnavailable(selectedFolder.value.path),
+  ),
+  startNewFolder: async () => {
+    if (selectedFolder.value) await startNewFolder(selectedFolder.value);
+  },
+});
+
+onBeforeUnmount(() => {
+  disposed = true;
+  if (props.treeRoot && isCreatingFolder.value) {
+    cancelNewFolder();
+  }
+  if (isRenamingFolder.value) {
+    uiStore.removeInputHandler('AlbumFolder-rename');
+  }
+});
 
 </script>

@@ -6,16 +6,20 @@
     position-key="manage-libraries"
     @cancel="clickCancel"
   >
+    <template #title-actions>
+      <button
+        type="button"
+        class="t-button-default btn-outline gap-1.5"
+        :disabled="isMaxLibraryReached || showAddInput || isRenaming || isAddingLibrary"
+        @click="startAddLibrary"
+      >
+        <IconAdd class="w-4 h-4" aria-hidden="true" />
+        {{ $t('msgbox.manage_libraries.add_new') }}
+      </button>
+    </template>
     <div class="flex flex-col flex-1 min-h-0 border border-base-content/5 bg-base-300/30 shadow-sm rounded-box overflow-hidden relative">
       <div class="flex items-center px-2 py-2 shrink-0 select-none">
         <span class="flex-1 sidebar-panel-header-title text-base-content/30">{{ $t('msgbox.manage_libraries.libraries') }} ({{ libraries.length }})</span>
-        <TButton
-          :icon="IconAdd"
-          :buttonSize="'small'"
-          :tooltip="$t('msgbox.manage_libraries.add_new')"
-          :disabled="isMaxLibraryReached || showAddInput || isRenaming || isAddingLibrary"
-          @click="startAddLibrary"
-        />
       </div>
 
       <div class="flex-1 min-h-0 overflow-x-hidden overflow-y-auto select-none">
@@ -147,7 +151,14 @@
       {{ inputErrorMessage }}
     </div>
 
-    <div class="flex justify-end items-center shrink-0 pt-2 min-h-[56px]">
+    <div class="flex justify-end items-center gap-2 shrink-0 pt-2 min-h-[56px]">
+      <button
+        type="button"
+        class="t-button-default"
+        @click="clickCancel"
+      >
+        {{ $t('msgbox.close') }}
+      </button>
       <button
         class="t-button-primary"
         :disabled="showAddInput || isRenaming"
@@ -191,18 +202,16 @@ import {
 } from '@/common/api';
 import { isValidFileName, formatFileSize } from '@/common/utils';
 import ModalDialog from '@/components/ModalDialog.vue';
-import TButton from '@/components/TButton.vue';
 import MessageBox from '@/components/MessageBox.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
 import {
   IconDragHandle,
-  IconEdit,
+  IconRename,
   IconTrash,
   IconHide,
   IconUnhide,
   IconAdd,
   IconPhotoAll,
-  IconBolt,
   IconMore,
   IconOrder,
 } from '@/common/icons';
@@ -309,7 +318,7 @@ const onKeyDown = (e: KeyboardEvent) => {
       tagName === 'select' ||
       target.isContentEditable;
 
-    if (isEditable) return;
+    if (isEditable || target.closest('button')) return;
 
     e.preventDefault();
     clickOk();
@@ -625,7 +634,7 @@ const libraryMenuItems = (lib: any) => {
   return [
     {
       label: t('msgbox.manage_libraries.rename'),
-      icon: IconEdit,
+      icon: IconRename,
       action: () => startRename(lib),
     },
     {
@@ -637,18 +646,18 @@ const libraryMenuItems = (lib: any) => {
       },
     },
     {
-      label: t('msgbox.manage_libraries.clean_cache'),
-      icon: IconBolt,
-      disabled: isCleaning,
-      action: () => cleanLibraryCache(lib),
-    },
-    {
       label: lib.hidden
         ? t('msgbox.manage_libraries.show')
         : t('msgbox.manage_libraries.hide'),
       icon: lib.hidden ? IconUnhide : IconHide,
       disabled: isDefault,
       action: () => toggleVisibility(lib),
+    },
+    { label: '-', action: null },
+    {
+      label: t('msgbox.manage_libraries.clean_cache'),
+      disabled: isCleaning,
+      action: () => cleanLibraryCache(lib),
     },
     { label: '-', action: null },
     {

@@ -828,7 +828,7 @@
       "library_file_path": "媒體庫檔案路徑",
       "library_file_size": "媒體庫檔案大小",
       "created_at": "建立時間",
-      "clean_cache": "清除未使用的縮圖快取",
+      "clean_cache": "清除未使用的快取",
       "cache_cleaned": "已清除 {count} 個縮圖，釋放 {size}。",
       "cache_size": "縮圖快取 {size}"
     },

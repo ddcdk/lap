@@ -828,7 +828,7 @@
       "library_file_path": "Percorso del file della libreria",
       "library_file_size": "Dimensione del file della libreria",
       "created_at": "Creata il",
-      "clean_cache": "Pulisci la cache delle miniature inutilizzate",
+      "clean_cache": "Pulisci la cache inutilizzata",
       "cache_cleaned": "Pulite {count} miniature, liberati {size}.",
       "cache_size": "cache miniature {size}"
     },

@@ -828,7 +828,7 @@
       "library_file_path": "Könyvtárfájl helye",
       "library_file_size": "Könyvtárfájl mérete",
       "created_at": "Létrehozva",
-      "clean_cache": "Nem használt bélyegképek törlése",
+      "clean_cache": "Nem használt gyorsítótár törlése",
       "cache_cleaned": "{count} bélyegkép törölve, {size} felszabadítva.",
       "cache_size": "bélyegkép-gyorsítótár: {size}"
     },

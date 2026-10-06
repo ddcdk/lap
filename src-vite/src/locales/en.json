@@ -828,7 +828,7 @@
       "library_file_path": "Library file path",
       "library_file_size": "Library file size",
       "created_at": "Created at",
-      "clean_cache": "Clean unused thumbnail cache",
+      "clean_cache": "Clean Unused Cache",
       "cache_cleaned": "Cleaned {count} thumbnails, freed {size}.",
       "cache_size": "thumbnail cache {size}"
     },

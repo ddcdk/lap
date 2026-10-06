@@ -828,7 +828,7 @@
       "library_file_path": "库文件路径",
       "library_file_size": "库文件大小",
       "created_at": "创建时间",
-      "clean_cache": "清理未使用的缩略图缓存",
+      "clean_cache": "清理未使用的缓存",
       "cache_cleaned": "已清理 {count} 张缩略图，释放 {size}。",
       "cache_size": "缩略图缓存 {size}"
     },

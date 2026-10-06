@@ -1,5 +1,11 @@
 <template>
-  <ModalDialog :title="$t('tag.edit_tag')" :width="500" :position-key="positionKey" @cancel="clickCancel">
+  <ModalDialog :title="$t('tag.edit_tag') + (allTags.length ? ` (${allTags.length.toLocaleString()})` : '')" :width="500" :position-key="positionKey" @cancel="clickCancel">
+    <template #title-actions>
+      <button type="button" class="t-button-default btn-outline gap-1.5" :disabled="!canEditTags || isCreatingTag || newTagGroupId !== null || renamingId !== null || isCreatingGroup" @click="showNewGroup = true">
+        <IconAdd class="w-4 h-4" aria-hidden="true" />
+        {{ $t('menu.tag.new_group') }}
+      </button>
+    </template>
     <section class="space-y-3">
       <div class="flex items-center gap-2">
         <div
@@ -34,18 +40,12 @@
         </div>
       </div>
       <div
-        v-if="allTags.length"
-        class="text-xs uppercase tracking-widest font-bold text-base-content/30 select-none"
-      >
-        {{ $t("tag.title") }} ({{ allTags.length }})
-      </div>
-      <div
         class="min-h-48 max-h-[50vh] overflow-y-auto rounded-box p-2 bg-base-100/30 border border-base-content/10 flex"
         :class="visibleGroups.length === 0 ? 'items-center justify-center' : ''"
       >
         <div v-if="visibleGroups.length > 0" class="w-full">
           <template v-for="group in visibleGroups" :key="group.id">
-            <div class="group/header flex items-center pr-1 rounded-box hover:bg-base-content/5">
+            <div :id="`dialog-tag-group-${group.id}`" class="group/header flex items-center pr-1 rounded-box hover:bg-base-content/5">
               <button
                 type="button"
                 class="sidebar-item min-w-0 flex-1 select-none"
@@ -71,7 +71,7 @@
                   @click.stop="startNewTag(group.id)"
                   @dblclick.stop
                 >
-                  <IconAdd class="w-4 h-4 cursor-pointer" />
+                  <IconTagAdd class="w-4 h-4 cursor-pointer" />
                 </button>
               </div>
             </div>
@@ -173,12 +173,12 @@
                     :title="$t('menu.tag.rename')"
                     @click.stop="startRename(tag)"
                   >
-                    <IconEdit class="w-4 h-4" />
+                    <IconRename class="w-4 h-4" />
                   </button>
                   <button
                     type="button"
                     class="p-1 text-base-content/40 hover:text-error cursor-pointer"
-                    :title="$t('tag.delete_tag')"
+                    :title="$t('menu.tag.delete')"
                     @click.stop="deleteTarget = tag"
                   >
                     <IconTrash class="w-4 h-4" />
@@ -221,6 +221,19 @@
     </div>
   </ModalDialog>
   <MessageBox
+    v-if="showNewGroup"
+    :title="$t('menu.tag.new_group')"
+    :showInput="true"
+    :needValidateInput="true"
+    :inputPlaceholder="$t('menu.tag.name')"
+    :isLoading="isCreatingGroup"
+    :errorMessage="groupError"
+    :OkText="$t('msgbox.ok')"
+    :cancelText="$t('msgbox.cancel')"
+    @ok="addNewGroup"
+    @cancel="showNewGroup = false; groupError = ''"
+  />
+  <MessageBox
     v-if="deleteTarget"
     :title="$t('msgbox.delete_tag.title')"
     :message="$t('msgbox.delete_tag.content', { tag: deleteTarget.name })"
@@ -247,6 +260,7 @@ import { useToast } from "@/common/toast";
 import {
   getAllTags,
   getTagGroups,
+  saveTagGroup,
   createTag,
   getTagSelectionCounts,
   applyTagsToFiles,
@@ -255,8 +269,9 @@ import {
 } from "@/common/api";
 import {
   IconAdd,
+  IconTagAdd,
   IconClose,
-  IconEdit,
+  IconRename,
   IconSearch,
   IconTag,
   IconTrash,
@@ -286,6 +301,37 @@ const toast = useToast();
 const { t } = useI18n();
 
 const allTags = ref<any[]>([]);
+const showNewGroup = ref(false);
+const isCreatingGroup = ref(false);
+const groupError = ref('');
+const tagsChangeSource = crypto.randomUUID();
+
+async function addNewGroup(value: string) {
+  const name = value.trim();
+  if (!name || isCreatingGroup.value) return;
+  if (groups.value.some(group => group.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+    groupError.value = t('menu.tag.name_exists');
+    return;
+  }
+  isCreatingGroup.value = true;
+  groupError.value = '';
+  try {
+    const id = await saveTagGroup(null, name);
+    if (id == null) throw new Error('save failed');
+    tagSearch.value = '';
+    collapsed.value = collapsed.value.filter(groupId => groupId !== id);
+    await loadAllTags();
+    await tauriEmit('tags-changed', { source: tagsChangeSource });
+    showNewGroup.value = false;
+    await nextTick();
+    document.getElementById(`dialog-tag-group-${id}`)?.scrollIntoView({ block: 'nearest' });
+    tagSearchInputRef.value?.focus({ preventScroll: true });
+  } catch {
+    groupError.value = t('tag.name_save_failed');
+  } finally {
+    isCreatingGroup.value = false;
+  }
+}
 const tagSearchInputRef = ref<HTMLInputElement | null>(null);
 const newTagNameInputRef = ref<HTMLInputElement | null>(null);
 const tagSearch = ref("");
@@ -361,7 +407,8 @@ onMounted(async () => {
   await nextTick();
   tagSearchInputRef.value?.focus();
 
-  const stop = await listen("tags-changed", async () => {
+  const stop = await listen<{ source?: string }>("tags-changed", async (event) => {
+    if (event.payload?.source === tagsChangeSource) return;
     await loadAllTags();
     if (!disposed) await loadExistingTagsForFiles(true);
   });

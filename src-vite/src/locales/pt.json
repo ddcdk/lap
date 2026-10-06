@@ -828,7 +828,7 @@
       "library_file_path": "Caminho do arquivo",
       "library_file_size": "Tamanho do arquivo",
       "created_at": "Criado em",
-      "clean_cache": "Limpar cache de miniaturas não usadas",
+      "clean_cache": "Limpar cache não usado",
       "cache_cleaned": "{count} miniaturas limpas, {size} liberados.",
       "cache_size": "cache de miniaturas {size}"
     },

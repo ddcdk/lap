@@ -12,7 +12,10 @@
           class="p-3 flex items-center justify-between select-none cursor-default shrink-0"
           @mousedown="dragStart"
         >
-          {{ title }}
+          <span class="min-w-0 flex-1">{{ title }}</span>
+          <div v-if="$slots['title-actions']" class="mr-2 shrink-0" @mousedown.stop>
+            <slot name="title-actions"></slot>
+          </div>
           <TButton
             :icon="IconClose"
             :buttonSize="'small'"

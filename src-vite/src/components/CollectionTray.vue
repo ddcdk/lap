@@ -169,7 +169,7 @@ import { useI18n } from 'vue-i18n';
 import { useUIStore } from '@/stores/uiStore';
 import { config, libConfig } from '@/common/config';
 import { clearCollection, createCollection, deleteCollection as deleteCollectionApi, getCollectionCounts, listCollections, renameCollection, reorderCollections } from '@/common/api';
-import { IconAdd, IconRight, IconEdit, IconMore, IconBookmark, IconRemove, IconTrash, IconClose, IconSearch, IconDragHandle, IconOrder } from '@/common/icons';
+import { IconAdd, IconRight, IconRename, IconMore, IconBookmark, IconRemove, IconTrash, IconClose, IconSearch, IconDragHandle, IconOrder } from '@/common/icons';
 import { VueDraggable } from 'vue-draggable-plus';
 import ContextMenu from '@/components/ContextMenu.vue';
 import MessageBox from '@/components/MessageBox.vue';
@@ -380,7 +380,7 @@ function collectionMenuItems(collection: Collection) {
   return [
     {
       label: t('collection.rename'),
-      icon: IconEdit,
+      icon: IconRename,
       action: () => startRename(collection),
     },
     {

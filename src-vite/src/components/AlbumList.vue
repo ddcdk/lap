@@ -203,11 +203,13 @@
               class="ml-6 mr-2 my-1 p-1 rounded-box bg-base-300/30 border border-base-content/5 shadow-sm"
             >
               <AlbumFolder
+                :ref="(el: any) => { if (el) albumFolderRefs[album.id] = el; else delete albumFolderRefs[album.id]; }"
                 :children="isFolderFiltering ? getFilteredFolderTree(album.id) : album.children"
                 :albumId="album.id"
                 :rootPath="album.path"
                 :unavailable="album.is_accessible === false"
                 :allowContextMenu="isMainPane"
+                :showFolderActions="selectionSource === 'destFolder'"
                 :filterVisiblePaths="isFolderFiltering ? getVisibleFolderPaths(album.id) : undefined"
                 :filterMatchedPaths="isFolderFiltering ? getMatchedFolderPaths(album.id) : undefined"
                 @folder-favorite-changed="refreshFolderSearchFolders"
@@ -276,6 +278,7 @@ import {
   isWin,
   setThumbnailDataUrlInflight,
   openFolderDialog,
+  isWithinRootPath,
 } from '@/common/utils';
 import { getAlbumQueueIndex, getAlbumScanState, getAlbumScanIcon, shouldAnimateAlbumScanIcon } from '@/common/scanStatus';
 import { getAllAlbums, getAlbumVisibleCounts, getAllAlbumFolders, reorderAlbums, addAlbum, editAlbum, removeAlbum,
@@ -370,6 +373,10 @@ const showRemoveAlbumMsgbox = ref(false);   // show remove album
 const importAlbum = ref<Album | null>(null);
 
 const albums = ref<Album[]>([]);
+const albumFolderRefs = ref<Record<number, InstanceType<typeof AlbumFolder>>>({});
+const selectedFolderTree = computed(() => albumFolderRefs.value[selection.albumId.value]);
+const isCreatingFolder = computed(() => !!selectedFolderTree.value?.isCreatingFolder);
+const canCreateSelectedFolder = computed(() => !!selectedFolderTree.value?.canCreateSelectedFolder);
 const albumCovers = ref<Record<number, string>>({});
 const folderSearch = ref('');
 const favoriteFoldersOnly = ref(false);
@@ -871,14 +878,28 @@ onMounted( async () => {
     const refreshedAlbums = Array.isArray(event.payload?.albums) ? event.payload.albums : [];
     const refreshFolders = event.payload?.refreshFolders !== false;
     const selectedAlbumId = selection.albumId.value;
-    const selectedFolderPath = selection.folderPath.value;
+    let selectedFolderPath = selection.folderPath.value;
     const shouldRestoreSelectedFolder = !selection.selected.value && !!selectedFolderPath;
+    const renamedFolder = event.payload?.renamedFolder;
+    if (renamedFolder?.albumId === selectedAlbumId &&
+      isWithinRootPath(selectedFolderPath, renamedFolder.oldPath)) {
+      selectedFolderPath = renamedFolder.newPath + selectedFolderPath.slice(renamedFolder.oldPath.length);
+      selection.folderPath.value = selectedFolderPath;
+    }
 
     for (const updatedAlbum of refreshedAlbums) {
       const albumId = Number(updatedAlbum?.id || 0);
       if (albumId <= 0) continue;
       const album = getAlbumById(albumId);
       if (!album) continue;
+
+      if (updatedAlbum.path && album.path !== updatedAlbum.path) {
+        if (albumId === selectedAlbumId && isWithinRootPath(selectedFolderPath, album.path)) {
+          selectedFolderPath = updatedAlbum.path + selectedFolderPath.slice(album.path.length);
+          selection.folderPath.value = selectedFolderPath;
+        }
+        album.path = updatedAlbum.path;
+      }
 
       album.is_accessible = updatedAlbum.is_accessible ?? album.is_accessible;
       album.total = updatedAlbum.total;
@@ -1349,13 +1370,11 @@ const clickFinalSubFolder = async (albumIdVal: number, folderPathVal: string) =>
     await expandAlbum(album, true);
 
     // recursively expand the final sub-folder path
-    expandFinalFolder(album, folderPathVal).then((folder: Folder | null) => {
-      if(folder) {
-        clickFolder(album.id, folder).then(() => {
-          scrollToFolder(folder.id);
-        });
-      }
-    });
+    const folder: Folder | null = await expandFinalFolder(album, folderPathVal);
+    if (folder) {
+      await clickFolder(album.id, folder);
+      scrollToFolder(folder.id);
+    }
   }
 };
 
@@ -1389,6 +1408,9 @@ function handleReorderOutsidePointerDown(event: PointerEvent) {
 
 // Expose methods
 defineExpose({
+  isCreatingFolder,
+  canCreateSelectedFolder,
+  startNewFolder: async () => { await selectedFolderTree.value?.startNewFolder(); },
   albums,
   clickNewAlbum,
   openAlbumEdit,

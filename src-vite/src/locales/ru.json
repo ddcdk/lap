@@ -828,7 +828,7 @@
       "library_file_path": "Путь к файлу",
       "library_file_size": "Размер файла",
       "created_at": "Создано",
-      "clean_cache": "Очистить неиспользуемый кэш миниатюр",
+      "clean_cache": "Очистить неиспользуемый кэш",
       "cache_cleaned": "Очищено миниатюр: {count}, освобождено {size}.",
       "cache_size": "кэш миниатюр {size}"
     },
