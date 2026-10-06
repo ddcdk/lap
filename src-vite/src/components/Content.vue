@@ -1136,7 +1136,10 @@ watch([selectMode, selectedFilesVersion, () => libConfig._libraryId], () => {
     for (let i = 0; i < ids.length; i += 500) {
       const files = await getFilesByIds(ids.slice(i, i + 500));
       if (request !== selectionAccessRequest || libraryId !== libConfig._libraryId) return;
-      if (!files || files.length !== Math.min(500, ids.length - i)) return;
+      if (!files || files.length !== Math.min(500, ids.length - i)) {
+        selectionAccessPending.value = false;
+        return;
+      }
       for (const file of files) states.push({ album_id: file.album_id, album_accessible: file.album_accessible, file_path: file.file_path });
     }
     selectionAccessFiles.value = states;

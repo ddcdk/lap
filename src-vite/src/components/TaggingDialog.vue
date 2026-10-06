@@ -149,7 +149,7 @@
                   maxlength="255"
                   @click.stop
                   @keydown.stop
-                  @keydown.enter.prevent="commitRename(tag)"
+                  @keydown.enter.prevent="!$event.isComposing && commitRename(tag)"
                   @keydown.escape.prevent="cancelRename"
                   @blur="commitRename(tag)"
                 />

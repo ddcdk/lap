@@ -533,7 +533,12 @@ async function clickAddTag(groupId?: number) {
   if (gid == null) return;
   saving.value = true;
   try {
-    const name = t("msgbox.new_tag.title");
+    await load();
+    const names = new Set(tags.value.map(tag => tag.name.toLocaleLowerCase()));
+    const baseName = t("msgbox.new_tag.title");
+    let name = baseName;
+    let index = 0;
+    while (names.has(name.toLocaleLowerCase())) name = `${baseName} ${++index}`;
     const result = await createTag(name, gid);
     if (!result) {
       toast.error(t("tag.name_save_failed"));

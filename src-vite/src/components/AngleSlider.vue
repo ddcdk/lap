@@ -163,7 +163,7 @@ const badgeLeftPx = computed(() => {
 });
 
 const quantize = (raw: number): number => {
-  const v = Math.abs(raw) <= props.snapZero ? 0 : Math.round(raw / props.step) * props.step;
+  const v = Math.abs(raw) < props.snapZero ? 0 : Math.round(raw / props.step) * props.step;
   return Math.min(props.max, Math.max(props.min, Number(v.toFixed(2))));
 };
 

@@ -1044,11 +1044,7 @@ const clickEditAlbum = async (folderPathParam: string, newName: string, newDescr
       if (!result) throw new Error('Could not save album');
       if (current) Object.assign(current, { name: newName, description: newDescription,
         file_types: filters.fileTypes, small_image_filter: filters.smallImageFilter, excluded_folders: filters.excludedFolders });
-      if (scopeChanged && current && filters.excludedFolders.some(folder => {
-        const root = `${current.path.replace(/[\\/]$/, '')}/${folder}`.replaceAll('\\', '/');
-        const selected = String(selection.folderPath.value || '').replaceAll('\\', '/');
-        return selected === root || selected.startsWith(`${root}/`);
-      })) clickAlbum(current);
+      if (scopeChanged && current && selection.albumId.value === current.id) clickAlbum(current);
       showAlbumEdit.value = false;
       await tauriEmit('album-updated', { albumId: editingAlbumId.value, name: newName, description: newDescription, filtersChanged });
       if (filtersChanged) {
