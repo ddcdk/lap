@@ -141,6 +141,7 @@ export const useConfigStore = defineStore('configStore', {
       mapProvider: 'global',      // global | tianditu
       tiandituToken: '',
       mapMarkerSize: 64,          // map photo marker size in px
+      mapTheme: 0,                // full Map view theme (0: standard, 1: satellite); independent of infoPanel.mapTheme
       grid: {
         sizePosition: 0,         // grid size slider position (0-1)
         style: 0,                // 0: card view, 1: tile view, 2: justified view, 3: masonry view

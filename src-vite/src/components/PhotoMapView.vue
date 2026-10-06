@@ -13,8 +13,8 @@
       <TButton :icon="IconZoomIn" :tooltip="t('map.zoom_in')" :disabled="zoom >= activeMaxZoom" @click="zoomIn" />
       <TButton :icon="IconMapCenter" :tooltip="t('map.zoom_center')" @click="isQueryMap ? fitBounds() : zoomCenter()" />
       <TButton
-        :icon="config.infoPanel.mapTheme === 0 ? IconMapDefault : IconMapSatellite"
-        :tooltip="t(config.infoPanel.mapTheme === 0 ? 'map.standard' : 'map.satellite')"
+        :icon="config.settings.mapTheme === 0 ? IconMapDefault : IconMapSatellite"
+        :tooltip="t(config.settings.mapTheme === 0 ? 'map.standard' : 'map.satellite')"
         @click="toggleMap"
       />
       <TButton v-if="showAppleMapsButton" :icon="IconExternal" :tooltip="t('file_info.open_apple_maps')" @click="openAppleMaps" />
@@ -144,7 +144,7 @@ onBeforeUnmount(() => {
   map = null
 })
 
-watch(() => [config.infoPanel.mapTheme, config.settings.mapProvider, config.settings.tiandituToken], updateTheme)
+watch(() => [config.settings.mapTheme, config.settings.mapProvider, config.settings.tiandituToken], updateTheme)
 watch(() => config.settings.mapMarkerSize, () => renderMarkers())
 watch(() => [props.queryParams, props.querySource, props.collectionId, props.fileIds], () => {
   if (!props.active) {
@@ -466,7 +466,7 @@ function addPhotoMarker(lat, lon, fileId, count, cluster = null) {
 }
 
 function updateTheme() {
-  const theme = getMapTheme(config.settings.mapProvider, config.settings.tiandituToken, config.infoPanel.mapTheme)
+  const theme = getMapTheme(config.settings.mapProvider, config.settings.tiandituToken, config.settings.mapTheme)
   applyTheme(theme, false)
 }
 
@@ -487,7 +487,7 @@ function applyTheme(theme, isFallback) {
       // Ignore them so an old OSM request cannot replace the new provider.
       if (tileLayer !== activeLayer || tileErrorFallbackTriggered || isFallback) return
       tileErrorFallbackTriggered = true
-      applyTheme(getGlobalMapTheme(config.infoPanel.mapTheme), true)
+      applyTheme(getGlobalMapTheme(config.settings.mapTheme), true)
     })
   })
 }
@@ -508,7 +508,7 @@ function zoomCenter() {
   zoom.value = 13
   updateFromCoords()
 }
-function toggleMap() { config.infoPanel.mapTheme = config.infoPanel.mapTheme === 0 ? 1 : 0 }
+function toggleMap() { config.settings.mapTheme = config.settings.mapTheme === 0 ? 1 : 0 }
 function validLatLon(lat, lon) { return lat != null && lon != null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 }
 async function openAppleMaps() {
   if (!showAppleMapsButton.value) return
