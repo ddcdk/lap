@@ -435,7 +435,7 @@ watch(isLoading, (loading) => {
 
 const activeImageEl = ref<HTMLImageElement | null>(null);
 const currentLoadingId = ref(0);
-type LoadedImage = { src: string; naturalWidth: number; naturalHeight: number; raw?: { source: RawPreviewSource; unavailable: boolean; pair: string } };
+type LoadedImage = { src: string; naturalWidth: number; naturalHeight: number; raw?: { source: RawPreviewSource; unavailable: boolean; pair: string | null } };
 const preloadCache = new Map<string, Promise<LoadedImage>>();
 const rawOverride = ref<RawDisplayOptions | null>(null);
 const rawSource = ref<RawPreviewSource>('');
@@ -505,7 +505,8 @@ async function loadRawImage(filePath: string): Promise<LoadedImage> {
   const controller = new AbortController();
   rawAbortController = controller;
   const url = new URL(getPreviewUrl(props.fileId, filePath, false, props.fileVersion));
-  appendRawDisplayParams(url.searchParams, requestedRawOptions.value);
+  const options = requestedRawOptions.value;
+  appendRawDisplayParams(url.searchParams, options);
   const response = await fetch(url.toString(), { signal: controller.signal });
   if (!response.ok) throw new Error('RAW preview failed');
   const blob = await response.blob();
@@ -520,7 +521,7 @@ async function loadRawImage(filePath: string): Promise<LoadedImage> {
     return { src, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, raw: {
       source: (response.headers.get('X-Raw-Source') || '') as RawPreviewSource,
       unavailable: response.headers.get('X-Raw-Embedded-Unavailable') === 'true',
-      pair: response.headers.get('X-Raw-Pair') || '',
+      pair: options.preferPair ? response.headers.get('X-Raw-Pair') || '' : null,
     } };
   } catch (error) {
     URL.revokeObjectURL(src);
@@ -1533,7 +1534,8 @@ watch([
       if (loaded.raw) {
         rawRequestPending.value = false;
         rawSource.value = loaded.raw.source;
-        resolvedRawPairLabel.value = loaded.raw.pair;
+        // RAW-only requests do not query companions; retain the known pair.
+        if (loaded.raw.pair !== null) resolvedRawPairLabel.value = loaded.raw.pair;
         rawEmbeddedUnavailable.value ||= loaded.raw.unavailable;
       }
       isZoomFit.value = props.isZoomFit;

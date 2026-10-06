@@ -132,9 +132,12 @@ async fn main() {
                 if let Err(e) = t_utils::restore_album_scopes(&_app.handle()) {
                     eprintln!("Failed to restore asset scopes: {}", e);
                 }
-                if let Ok(mut albums) = t_sqlite::Album::get_all_albums() {
-                    t_utils::refresh_all_album_accessibility(&mut albums);
-                }
+                let generation = t_utils::album_accessibility_generation();
+                tauri::async_runtime::spawn_blocking(move || {
+                    if let Ok(mut albums) = t_sqlite::Album::get_all_albums() {
+                        t_utils::refresh_all_album_accessibility_if_current(&mut albums, generation);
+                    }
+                });
             }
 
             // Initialize AI Engine

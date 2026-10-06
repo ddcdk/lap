@@ -2005,8 +2005,25 @@ fn is_path_not_found(err: &str) -> bool {
 /// starts the previous one is cancelled (its generation is invalidated).
 static FOLDER_SYNC_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static ACTIVE_ALBUM_SCANS: Lazy<Mutex<HashSet<i64>>> = Lazy::new(|| Mutex::new(HashSet::new()));
-static INACCESSIBLE_ALBUM_IDS: Lazy<Mutex<HashSet<i64>>> =
-    Lazy::new(|| Mutex::new(HashSet::new()));
+#[derive(Default)]
+struct AlbumAccessibilityCache {
+    generation: u64,
+    ids: HashSet<i64>,
+}
+
+impl AlbumAccessibilityCache {
+    fn replace_if_current(&mut self, generation: u64, ids: HashSet<i64>) {
+        if self.generation == generation { self.ids = ids; }
+    }
+
+    fn clear(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.ids.clear();
+    }
+}
+
+static INACCESSIBLE_ALBUM_IDS: Lazy<Mutex<AlbumAccessibilityCache>> =
+    Lazy::new(|| Mutex::new(AlbumAccessibilityCache::default()));
 static ALBUM_SYNC_LOCKS: Lazy<Mutex<HashMap<i64, Arc<Mutex<()>>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
@@ -3436,17 +3453,19 @@ pub fn file_accessible(path: &str) -> bool {
 }
 
 pub fn album_accessible(album_id: i64) -> bool {
-    !INACCESSIBLE_ALBUM_IDS.lock().unwrap().contains(&album_id)
+    !INACCESSIBLE_ALBUM_IDS.lock().unwrap().ids.contains(&album_id)
 }
 
 pub fn refresh_album_accessibility(album: &mut Album) {
+    let generation = album_accessibility_generation();
     album.is_accessible = directory_accessible(&album.path);
     if let Some(album_id) = album.id {
         let mut inaccessible = INACCESSIBLE_ALBUM_IDS.lock().unwrap();
+        if inaccessible.generation != generation { return; }
         if album.is_accessible {
-            inaccessible.remove(&album_id);
+            inaccessible.ids.remove(&album_id);
         } else {
-            inaccessible.insert(album_id);
+            inaccessible.ids.insert(album_id);
         }
     }
 }
@@ -3454,10 +3473,18 @@ pub fn refresh_album_accessibility(album: &mut Album) {
 pub fn apply_album_accessibility(album: &mut Album) {
     album.is_accessible = album
         .id
-        .is_none_or(|album_id| !INACCESSIBLE_ALBUM_IDS.lock().unwrap().contains(&album_id));
+        .is_none_or(|album_id| !INACCESSIBLE_ALBUM_IDS.lock().unwrap().ids.contains(&album_id));
+}
+
+pub fn album_accessibility_generation() -> u64 {
+    INACCESSIBLE_ALBUM_IDS.lock().unwrap().generation
 }
 
 pub fn refresh_all_album_accessibility(albums: &mut [Album]) {
+    refresh_all_album_accessibility_if_current(albums, album_accessibility_generation());
+}
+
+pub fn refresh_all_album_accessibility_if_current(albums: &mut [Album], generation: u64) {
     let mut inaccessible = HashSet::new();
     for album in albums {
         album.is_accessible = directory_accessible(&album.path);
@@ -3467,7 +3494,7 @@ pub fn refresh_all_album_accessibility(albums: &mut [Album]) {
             }
         }
     }
-    *INACCESSIBLE_ALBUM_IDS.lock().unwrap() = inaccessible;
+    INACCESSIBLE_ALBUM_IDS.lock().unwrap().replace_if_current(generation, inaccessible);
 }
 
 pub fn clear_album_accessibility() {
@@ -4474,5 +4501,19 @@ mod meta_date_tests {
             assert_eq!(meta_date_to_timestamp(&date), meta_date_to_timestamp(photo));
         }
         assert_eq!(metadata_wallclock_date("invalid"), None);
+    }
+}
+
+#[cfg(test)]
+mod album_accessibility_cache_tests {
+    use super::*;
+    #[test]
+    fn stale_probe_cannot_overwrite_new_library_cache() {
+        let mut cache = AlbumAccessibilityCache::default();
+        let old_generation = cache.generation;
+        cache.clear();
+        cache.replace_if_current(cache.generation, HashSet::from([2]));
+        cache.replace_if_current(old_generation, HashSet::from([1]));
+        assert_eq!(cache.ids, HashSet::from([2]));
     }
 }

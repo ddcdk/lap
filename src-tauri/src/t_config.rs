@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock, RwLock};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -19,6 +19,15 @@ use crate::t_storage;
 
 static APP_IDENTIFIER: OnceLock<String> = OnceLock::new();
 static CONFIG_IO_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static CURRENT_LIBRARY_ID: RwLock<Option<String>> = RwLock::new(None);
+
+pub fn current_library_id() -> Result<String, String> {
+    if let Some(id) = CURRENT_LIBRARY_ID.read().map_err(|e| e.to_string())?.clone() {
+        return Ok(id);
+    }
+    Ok(load_app_config()?.current_library_id)
+}
+
 
 pub fn set_app_identifier(identifier: &str) {
     let _ = APP_IDENTIFIER.set(identifier.to_string());
@@ -481,7 +490,9 @@ pub fn load_app_config() -> Result<AppConfig, String> {
     let _guard = config_io_lock()
         .lock()
         .map_err(|_| "Config lock poisoned".to_string())?;
-    load_app_config_locked()
+    let config = load_app_config_locked()?;
+    *CURRENT_LIBRARY_ID.write().map_err(|e| e.to_string())? = Some(config.current_library_id.clone());
+    Ok(config)
 }
 
 fn load_app_config_locked() -> Result<AppConfig, String> {
@@ -556,6 +567,7 @@ fn save_app_config_locked(config: &AppConfig) -> Result<(), String> {
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
     write_atomic(&config_path, &content)
         .map_err(|e| format!("Failed to write config file: {}", e))?;
+    *CURRENT_LIBRARY_ID.write().map_err(|e| e.to_string())? = Some(config.current_library_id.clone());
     Ok(())
 }
 
@@ -857,6 +869,9 @@ pub fn get_library_info(id: &str) -> Result<LibraryInfo, String> {
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .unwrap_or((0, 0));
+
+    drop(conn);
+    drop(_lease);
 
     // Sum thumbnail cache size (jpg/png files under cache_dir/{id}/).
     // Best-effort: any IO error just contributes 0 rather than failing the call.

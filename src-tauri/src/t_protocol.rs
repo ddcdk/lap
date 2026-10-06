@@ -228,33 +228,39 @@ pub fn register_protocols(builder: Builder<Wry>) -> Builder<Wry> {
                 return;
             }
 
-            let library_id = path.trim_start_matches('/').split('/').next().unwrap_or("default");
-            let file = match crate::t_cmds::with_current_library(library_id, || t_sqlite::AFile::get_file_info(file_id)) {
-                Ok(Some(file)) => file,
-                _ => {
-                    responder.respond(text_response(http::StatusCode::NOT_FOUND, "file not found"));
-                    return;
-                }
-            };
-
-            let is_raw = file.file_type == Some(3);
-            let companion = if cached_only && file.media_subtype.as_deref() == Some("raw_jpeg_pair") {
-                file.live_photo_video_id.and_then(|id| t_sqlite::AFile::get_file_info(id).ok().flatten())
-            } else {
-                crate::t_raw_display::paired_file(file_id, RawDisplayOptions { prefer_pair: true, ..options })
-            };
-            let file_path = match file.file_path {
-                Some(path) if !path.is_empty() => path,
-                _ => {
-                    responder.respond(text_response(
-                        http::StatusCode::NOT_FOUND,
-                        "file path not found",
-                    ));
-                    return;
-                }
-            };
-
+            let library_id = path.trim_start_matches('/').split('/').next().unwrap_or("default").to_string();
             tauri::async_runtime::spawn(async move {
+                // Scheme callbacks can run on the UI thread. Never wait for a
+                // library lock, configuration IO or SQLite there.
+                let lookup = tauri::async_runtime::spawn_blocking(move || {
+                    crate::t_cmds::with_current_library(&library_id, || {
+                        let file = t_sqlite::AFile::get_file_info(file_id)?
+                            .ok_or_else(|| "File not found".to_string())?;
+                        let companion = if !options.prefer_pair {
+                            None
+                        } else if cached_only && file.media_subtype.as_deref() == Some("raw_jpeg_pair") {
+                            file.live_photo_video_id.and_then(|id| t_sqlite::AFile::get_file_info(id).ok().flatten())
+                        } else {
+                            crate::t_raw_display::paired_file(file_id, options)
+                        };
+                        Ok((file, companion))
+                    })
+                }).await;
+                let (file, companion) = match lookup {
+                    Ok(Ok(files)) => files,
+                    _ => {
+                        responder.respond(text_response(http::StatusCode::NOT_FOUND, "file not found"));
+                        return;
+                    }
+                };
+                let is_raw = file.file_type == Some(3);
+                let file_path = match file.file_path {
+                    Some(path) if !path.is_empty() => path,
+                    _ => {
+                        responder.respond(text_response(http::StatusCode::NOT_FOUND, "file path not found"));
+                        return;
+                    }
+                };
                 if cached_only {
                     let paired_cache = options.prefer_pair.then(|| companion.as_ref()
                         .and_then(|file| file.file_path.as_deref())

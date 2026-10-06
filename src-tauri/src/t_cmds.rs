@@ -31,20 +31,20 @@ use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tauri::{AppHandle, Emitter, State};
 
 // Scoped refreshes and RAW thumbnail requests can open several connections.
 // Keep their library stable until all reads and writes have completed.
-static FILE_REFRESH_LIBRARY_LOCK: Mutex<()> = Mutex::new(());
+static FILE_REFRESH_LIBRARY_LOCK: RwLock<()> = RwLock::new(());
 
 fn with_library_context<T>(
-    lock: &Mutex<()>,
+    lock: &RwLock<()>,
     library_id: &str,
     current_library: impl FnOnce() -> Result<String, String>,
     operation: impl FnOnce() -> Result<T, String>,
 ) -> Result<T, String> {
-    let _guard = lock.lock().map_err(|e| e.to_string())?;
+    let _guard = lock.read().map_err(|e| e.to_string())?;
     if current_library()? != library_id {
         return Err("Library changed".to_string());
     }
@@ -56,7 +56,7 @@ pub(crate) fn with_current_library<T>(
     operation: impl FnOnce() -> Result<T, String>,
 ) -> Result<T, String> {
     with_library_context(&FILE_REFRESH_LIBRARY_LOCK, library_id,
-        || Ok(t_config::load_app_config()?.current_library_id), operation)
+        t_config::current_library_id, operation)
 }
 
 // cancellation token for indexing
@@ -343,28 +343,34 @@ fn ensure_db_storage_change_allowed(
 }
 
 #[tauri::command]
-pub fn change_db_storage_dir(
-    new_dir: &str,
-    status_state: State<t_face::FaceIndexingStatus>,
+pub async fn change_db_storage_dir(
+    new_dir: String,
+    status_state: State<'_, t_face::FaceIndexingStatus>,
 ) -> Result<t_storage::DbStorageChangeResult, String> {
     ensure_db_storage_change_allowed(&status_state)?;
-    let result = t_storage::change_db_storage_dir(new_dir);
-    if result.is_ok() {
-        revalidate_db_after_path_change();
-    }
-    result
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = FILE_REFRESH_LIBRARY_LOCK.write().map_err(|e| e.to_string())?;
+        let result = t_storage::change_db_storage_dir(&new_dir);
+        if result.is_ok() {
+            revalidate_db_after_path_change();
+        }
+        result
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn reset_db_storage_dir(
-    status_state: State<t_face::FaceIndexingStatus>,
+pub async fn reset_db_storage_dir(
+    status_state: State<'_, t_face::FaceIndexingStatus>,
 ) -> Result<t_storage::DbStorageChangeResult, String> {
     ensure_db_storage_change_allowed(&status_state)?;
-    let result = t_storage::reset_db_storage_dir();
-    if result.is_ok() {
-        revalidate_db_after_path_change();
-    }
-    result
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = FILE_REFRESH_LIBRARY_LOCK.write().map_err(|e| e.to_string())?;
+        let result = t_storage::reset_db_storage_dir();
+        if result.is_ok() {
+            revalidate_db_after_path_change();
+        }
+        result
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// The db file moved to a new path without going through switch_library, so drop stale pooled
@@ -403,8 +409,11 @@ pub fn edit_library(id: &str, name: &str) -> Result<(), String> {
 
 /// remove a library (also deletes the database file)
 #[tauri::command]
-pub fn remove_library(id: &str) -> Result<(), String> {
-    t_config::remove_library(id)
+pub async fn remove_library(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = FILE_REFRESH_LIBRARY_LOCK.write().map_err(|e| e.to_string())?;
+        t_config::remove_library(&id)
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Startup integrity check result for the selected library.
@@ -420,7 +429,7 @@ pub async fn switch_library(app_handle: tauri::AppHandle, id: String) -> Result<
     // create_db's returned error itself rather than re-reading the process-global flag afterwards
     // (which a concurrent switch could resolve against a different library).
     let corrupted = tauri::async_runtime::spawn_blocking(move || -> Result<bool, String> {
-        let _guard = FILE_REFRESH_LIBRARY_LOCK.lock().map_err(|e| e.to_string())?;
+        let _guard = FILE_REFRESH_LIBRARY_LOCK.write().map_err(|e| e.to_string())?;
         t_config::switch_library(&id)?;
         t_utils::clear_album_accessibility();
         t_sqlite::clear_conn_pool();
@@ -2853,8 +2862,8 @@ pub fn update_file_info(file_id: i64, file_path: &str) -> Result<Option<AFile>, 
 #[tauri::command]
 pub async fn refresh_selected_file_info(library_id: String, file_id: i64) -> Result<Option<AFile>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = FILE_REFRESH_LIBRARY_LOCK.lock().map_err(|e| e.to_string())?;
-        if t_config::load_app_config()?.current_library_id != library_id {
+        let _guard = FILE_REFRESH_LIBRARY_LOCK.read().map_err(|e| e.to_string())?;
+        if t_config::current_library_id()? != library_id {
             return Err("Library changed".to_string());
         }
         let old = AFile::get_file_info(file_id)?.ok_or("File not found")?;
@@ -3512,11 +3521,11 @@ pub fn restore_databases(
 #[cfg(test)]
 mod raw_display_library_tests {
     use super::with_library_context;
-    use std::sync::{Arc, Mutex, TryLockError, mpsc};
+    use std::sync::{Arc, Mutex, RwLock, TryLockError, mpsc};
 
     #[test]
     fn raw_display_rejects_queued_work_after_library_switch() {
-        let lock = Mutex::new(());
+        let lock = RwLock::new(());
         let mut ran = false;
         let result = with_library_context(&lock, "library-a", || Ok("library-b".into()), || {
             ran = true;
@@ -3527,8 +3536,36 @@ mod raw_display_library_tests {
     }
 
     #[test]
+    fn raw_display_allows_concurrent_readers_while_blocking_switches() {
+        let lock = Arc::new(RwLock::new(()));
+        let (started_tx, started_rx) = mpsc::channel();
+        let mut releases = Vec::new();
+        let mut workers = Vec::new();
+        for _ in 0..4 {
+            let lock = lock.clone();
+            let started = started_tx.clone();
+            let (release_tx, release_rx) = mpsc::channel();
+            releases.push(release_tx);
+            workers.push(std::thread::spawn(move || {
+                with_library_context(&lock, "library-a", || Ok("library-a".into()), || {
+                    started.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    Ok(())
+                })
+            }));
+        }
+        let concurrent = (0..4).all(|_| started_rx.recv_timeout(std::time::Duration::from_secs(2)).is_ok());
+        let switch_blocked = matches!(lock.try_write(), Err(TryLockError::WouldBlock));
+        for release in releases { release.send(()).unwrap(); }
+        for worker in workers { worker.join().unwrap().unwrap(); }
+        assert!(concurrent, "all four readers must enter before decoding completes");
+        assert!(switch_blocked, "switches must wait until cache writes complete");
+        assert!(lock.try_write().is_ok());
+    }
+
+    #[test]
     fn raw_display_keeps_library_locked_through_cache_write() {
-        let lock = Arc::new(Mutex::new(()));
+        let lock = Arc::new(RwLock::new(()));
         let current = Arc::new(Mutex::new("library-a".to_string()));
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
@@ -3543,10 +3580,10 @@ mod raw_display_library_tests {
             })
         });
         started_rx.recv().unwrap();
-        assert!(matches!(lock.try_lock(), Err(TryLockError::WouldBlock)));
+        assert!(matches!(lock.try_write(), Err(TryLockError::WouldBlock)));
         release_tx.send(()).unwrap();
         worker.join().unwrap().unwrap();
-        let guard = lock.lock().unwrap();
+        let guard = lock.write().unwrap();
         *current.lock().unwrap() = "library-b".into();
         drop(guard);
         assert!(with_library_context(&lock, "library-a", || Ok(current.lock().unwrap().clone()), || Ok(())).is_err());
