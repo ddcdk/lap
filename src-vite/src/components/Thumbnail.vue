@@ -31,8 +31,8 @@
         :class="{
           'group-hover:scale-115': shouldScaleThumbnail,
           'scale-115': shouldScaleThumbnail && isSelected,
-          'object-contain': !isGeometryGridStyle && config.settings.grid.scaling === 0,
-          'object-cover': isGeometryGridStyle || config.settings.grid.scaling === 1,
+          'object-contain': fitRawPairPreview || (!isGeometryGridStyle && config.settings.grid.scaling === 0),
+          'object-cover': !fitRawPairPreview && (isGeometryGridStyle || config.settings.grid.scaling === 1),
           'object-fill': !isGeometryGridStyle && config.settings.grid.scaling === 2,
           'transition-all': !isTransitionDisabled && normalizedRotate === 0,
           'opacity-0': !isThumbnailLoaded,
@@ -335,7 +335,12 @@ const isGifFile = computed(() => getFileExtension(props.file?.name || props.file
 const animatedImagePreviewSrc = computed(() => getAssetSrc(props.file?.file_path || '', Number(props.file?.modified_at || 0)));
 const canPreviewAnimatedImage = computed(() => !originalUnavailable.value && isAnimatableImageFile.value && !!animatedImagePreviewSrc.value);
 const isGeometryGridStyle = computed(() => config.settings.grid.style === 2 || config.settings.grid.style === 3);
-const shouldScaleThumbnail = computed(() => config.settings.grid.style === 1 || isGeometryGridStyle.value);
+// Pair previews can have a different crop than the RAW dimensions used by layout.
+const fitRawPairPreview = computed(() => isGeometryGridStyle.value && isRawJpegPair.value
+  && config.settings.groupRawJpegPairs && config.settings.rawPairDisplaySource === 'jpeg'
+  && !!props.file?.live_photo_video_path);
+const shouldScaleThumbnail = computed(() => !fitRawPairPreview.value
+  && (config.settings.grid.style === 1 || isGeometryGridStyle.value));
 const thumbnailCornerClass = computed(() => (
   config.settings.grid.thumbnailCorners === 1 ? 'rounded-none' : 'rounded-box'
 ));
