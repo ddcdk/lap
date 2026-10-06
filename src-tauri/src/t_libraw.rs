@@ -497,9 +497,14 @@ fn raw_flip_to_exif_orientation(flip: i32) -> Option<i32> {
     }
 }
 
+pub(crate) fn embedded_preview_is_large_enough(width: u32, height: u32, raw_width: u32, raw_height: u32) -> bool {
+    width.max(height) >= raw_width.max(raw_height).min(1024)
+        && width.min(height) >= raw_width.min(raw_height).min(512)
+}
+
 pub(crate) fn get_embedded_raw_preview_image(file_path: &str) -> Result<Option<Vec<u8>>, String> {
     let mut raw = RawHandle::open(file_path)?;
-    let (_raw_width, _raw_height, raw_flip) = raw.dimensions_with_flip()?;
+    let (raw_width, raw_height, raw_flip) = raw.dimensions_with_flip()?;
     let mut thumbs = raw.extract_thumbnails();
     thumbs.sort_by_key(|thumb| std::cmp::Reverse(thumb.width as u64 * thumb.height as u64));
 
@@ -512,6 +517,7 @@ pub(crate) fn get_embedded_raw_preview_image(file_path: &str) -> Result<Option<V
                 .or_else(|| raw_flip_to_exif_orientation(raw_flip))
                 .unwrap_or(1);
             if let Ok(image) = image::load_from_memory(&thumb.data) {
+                if !embedded_preview_is_large_enough(image.width(), image.height(), raw_width, raw_height) { continue; }
                 let image = orient_image(image, orient);
                 return encode_as_jpeg(&image).map(Some);
             }
@@ -726,5 +732,17 @@ mod raw_display_render_tests {
             assert!(get_raw_thumbnail(path_str, 64, options(mode)).unwrap().is_some());
         }
         std::fs::remove_file(path).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod embedded_preview_size_tests {
+    use super::embedded_preview_is_large_enough as usable;
+    #[test]
+    fn rejects_tiny_previews_but_accepts_reduced_and_rotated_images() {
+        assert!(!usable(160, 120, 6000, 4000));
+        assert!(usable(1536, 1024, 6000, 4000));
+        assert!(usable(1024, 1536, 6000, 4000));
+        assert!(usable(640, 480, 640, 480));
     }
 }

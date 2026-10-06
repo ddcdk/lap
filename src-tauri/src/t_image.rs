@@ -739,6 +739,10 @@ pub fn get_raw_preview_image(
         return Ok(Some(data));
     }
 
+    get_raw_preview_fallback_image(file_path)
+}
+
+fn get_raw_preview_fallback_image(file_path: &str) -> Result<Option<Vec<u8>>, String> {
     // Final fallback for unsupported RAW renderers or files without a usable
     // processed output. The selected source still controls the normal path.
     if let Ok(Some(preview)) = select_embedded_jpeg_for_preview(file_path) {
@@ -1854,18 +1858,23 @@ fn get_raw_preview_with_source(path: &str, options: RawDisplayOptions) -> Result
         // Some cameras expose previews that LibRaw cannot extract. Preserve the
         // existing JPEG extraction fallback, with accurate source metadata.
         if let Ok(Some(preview)) = select_embedded_jpeg_for_preview(path) {
-            if let Ok(image) = image::load_from_memory(&preview.data) {
+            let (raw_width, raw_height, _) = t_libraw::get_raw_dimensions_with_flip(path).unwrap_or((1024, 512, 0));
+            if t_libraw::embedded_preview_is_large_enough(preview.width, preview.height, raw_width, raw_height)
+                && let Ok(image) = image::load_from_memory(&preview.data) {
                 let image = apply_orientation(image, preview.orientation);
                 let data = crate::t_jpeg::encode_rgb8(&image.to_rgb8(), 85).map_err(|e| e.to_string())?;
                 return Ok((data, "embedded", false));
             }
         }
     }
-    let (data, source, _) = t_libraw::get_raw_preview_with_source(path, RawDisplayOptions {
-        mode: crate::t_raw_display::RawPreviewMode::Rendered,
-        ..options
-    })?;
-    Ok((data, source, options.embedded()))
+    let rendered = RawDisplayOptions { mode: crate::t_raw_display::RawPreviewMode::Rendered, ..options };
+    match t_libraw::get_raw_preview_with_source(path, rendered) {
+        Ok((data, source, _)) => Ok((data, source, options.embedded())),
+        Err(error) => match get_raw_preview_fallback_image(path)? {
+            Some(data) => Ok((data, "", options.embedded())),
+            None => Err(error),
+        },
+    }
 }
 
 // Keep decoder work off the async runtime and bound concurrent full RAW previews.

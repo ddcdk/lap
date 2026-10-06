@@ -221,7 +221,7 @@ async fn probe_json_with_timeout(file_path: &str, timeout_secs: u64) -> Result<V
     let mut cmd = ffprobe_command();
 
     cmd.args(["-v", "quiet"]);
-    if crate::t_image::is_heic_path(file_path) {
+    if crate::t_image::is_heic_path(file_path) && find_sidecar(ffprobe_sidecar_name()).is_some() {
         cmd.arg("-show_stream_groups");
     }
     if should_skip_duration_probe(file_path) {
