@@ -3709,6 +3709,21 @@ impl AFile {
         if let Some(mut file) = existing_file {
             // check file modified time or if thumbnail is missing
             let file_info = t_utils::FileInfo::new(file_path)?;
+            // Re-read legacy ISO dates using source-aware timezone handling.
+            // Probe failure must not prevent marking the existing file as seen.
+            if file_type == 2
+                && let Some(id) = file.id
+                && file.e_date_time.as_deref().and_then(t_utils::metadata_wallclock_date).is_some()
+                && let Some(date) = t_video::get_video_metadata(file_path).ok().and_then(|meta| meta.e_date_time)
+                && let Some(taken) = t_utils::meta_date_to_timestamp(&date)
+            {
+                open_conn()?.execute(
+                    "UPDATE afiles SET e_date_time = ?1, taken_date = ?2 WHERE id = ?3",
+                    params![date, taken, id],
+                ).map_err(|e| e.to_string())?;
+                file.e_date_time = Some(date);
+                file.taken_date = Some(taken);
+            }
             let modified = file.modified_at != file_info.modified;
             let missing_thumb = !file.has_thumbnail.unwrap_or(false);
             let needs_tiff_dimension_refresh = t_libraw::is_tiff_path(file_path)

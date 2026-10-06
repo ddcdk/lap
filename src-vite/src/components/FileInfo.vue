@@ -388,7 +388,7 @@
 
             <!-- Taken At -->
             <div class="flex items-center text-[11px] text-base-content/45 h-6">{{ $t('file_info.taken_at') }}</div>
-            <div class="flex items-center text-[12px] text-base-content/75">{{ fileInfo?.e_date_time }}</div>
+            <div class="flex items-center text-[12px] text-base-content/75">{{ fileInfo?.e_date_time ? formatTimestamp(fileInfo?.taken_date, 'date_time') : '' }}</div>
 
             <!-- Description -->
             <div class="flex items-start text-[11px] text-base-content/45 py-1.5">{{ $t('file_info.description') }}</div>

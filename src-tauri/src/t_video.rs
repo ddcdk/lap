@@ -752,13 +752,7 @@ pub async fn get_video_metadata_async(file_path: &str) -> Result<VideoMetadata, 
         })
     });
 
-    let e_date_time = first_parseable_date(&meta, &["com.apple.quicktime.creationdate"])
-        .or_else(|| {
-            stream_meta.as_ref().and_then(|meta| {
-                first_parseable_date(meta, &["com.apple.quicktime.creationdate"])
-            })
-        })
-        .or_else(|| first_exist(&meta, &["creation_time"]));
+    let e_date_time = video_capture_date(&meta, stream_meta.as_ref());
 
     Ok(VideoMetadata {
         width: w,
@@ -1029,6 +1023,44 @@ fn first_camera_tag(
         .or_else(|| stream_meta.and_then(|tags| first_exist(tags, &[apple_key])))
         .or_else(|| first_exist(meta, generic_keys))
         .or_else(|| stream_meta.and_then(|tags| first_exist(tags, generic_keys)))
+}
+
+fn video_capture_date(
+    meta: &HashMap<String, String>,
+    stream_meta: Option<&HashMap<String, String>>,
+) -> Option<String> {
+    first_parseable_date(meta, &["com.apple.quicktime.creationdate"])
+        .or_else(|| stream_meta.and_then(|tags| {
+            first_parseable_date(tags, &["com.apple.quicktime.creationdate"])
+        }))
+        .map(|date| t_utils::metadata_wallclock_date(&date).unwrap_or(date))
+        // UTC-only timestamps have no shoot-site timezone. Convert to system
+        // local time before storing the same naive date format as photos.
+        .or_else(|| first_exist(meta, &["creation_time"]).map(|date| {
+            chrono::DateTime::parse_from_rfc3339(&date).ok().and_then(|dt| {
+                let local = dt.with_timezone(&chrono::Local).format("%Y:%m:%d %H:%M:%S").to_string();
+                // Keep the absolute timestamp during ambiguous DST hours.
+                (t_utils::meta_date_to_timestamp(&local) == Some(dt.timestamp())).then_some(local)
+            }).unwrap_or(date)
+        }))
+}
+
+#[cfg(test)]
+mod capture_date_tests {
+    use super::*;
+
+    #[test]
+    fn quicktime_z_preserves_wallclock_but_creation_time_converts_utc() {
+        let date = "2019-05-27T11:10:03.000000Z";
+        let quicktime = HashMap::from([("com.apple.quicktime.creationdate".into(), date.into())]);
+        assert_eq!(video_capture_date(&quicktime, None).as_deref(), Some("2019:05:27 11:10:03"));
+        assert_eq!(video_capture_date(&HashMap::new(), Some(&quicktime)), video_capture_date(&quicktime, None));
+
+        let utc = HashMap::from([("creation_time".into(), date.into())]);
+        let expected = chrono::DateTime::parse_from_rfc3339(date).unwrap()
+            .with_timezone(&chrono::Local).format("%Y:%m:%d %H:%M:%S").to_string();
+        assert_eq!(video_capture_date(&utc, None), Some(expected));
+    }
 }
 
 fn first_parseable_date(meta: &HashMap<String, String>, keys: &[&str]) -> Option<String> {

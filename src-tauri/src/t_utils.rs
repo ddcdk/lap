@@ -3367,6 +3367,14 @@ pub fn meta_date_to_timestamp(date: &str) -> Option<i64> {
     Some(local_dt.timestamp())
 }
 
+/// Keep the recording wall clock, matching timezone-free photo EXIF dates.
+pub fn metadata_wallclock_date(date: &str) -> Option<String> {
+    DateTime::parse_from_rfc3339(date)
+        .or_else(|_| DateTime::parse_from_str(date, "%Y-%m-%dT%H:%M:%S%z"))
+        .ok()
+        .map(|dt| dt.format("%Y:%m:%d %H:%M:%S").to_string())
+}
+
 /// EXIF GPS data is often stored in a format that includes degrees, minutes, and seconds (DMS),
 /// which requires conversion to decimal format for easier use
 #[allow(dead_code)]
@@ -4450,5 +4458,21 @@ mod album_scan_filter_tests {
         let counts = count_folder_files(root.to_str().unwrap());
         assert_eq!((counts.1,counts.3,counts.5),(4,1,5));
         fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod meta_date_tests {
+    use super::*;
+
+    #[test]
+    fn video_wallclock_matches_photo_date() {
+        let photo = "2025:12:31 13:36:26";
+        for video in ["2025-12-31T13:36:26+01:00", "2025-12-31T13:36:26+0100", "2025-12-31T13:36:26Z"] {
+            let date = metadata_wallclock_date(video).unwrap();
+            assert_eq!(date, photo);
+            assert_eq!(meta_date_to_timestamp(&date), meta_date_to_timestamp(photo));
+        }
+        assert_eq!(metadata_wallclock_date("invalid"), None);
     }
 }
