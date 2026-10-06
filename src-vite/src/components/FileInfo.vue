@@ -84,12 +84,13 @@
                   @click.stop="increasePreviewScale"
                 />
               </div>
-              <div class="absolute inset-0 cursor-pointer" @click.stop="$emit('openViewer')">
+              <div class="absolute inset-0">
                 <img
                   v-if="fileInfo?.thumbnail"
                   :src="fileInfo.thumbnail"
                   class="h-full w-full object-contain"
                   :style="previewImageStyle"
+                  draggable="false"
                 />
                 <video
                   v-if="showVideoPreview"
@@ -199,13 +200,7 @@
 
             <!-- Album -->
             <div class="flex items-center text-[11px] text-base-content/45 h-6">{{ $t('file_info.album_name') }}</div>
-            <div class="flex items-center min-w-0 gap-1.5">
-              <span class="w-5 h-5 rounded-full overflow-hidden bg-base-300/70 ring-1 ring-base-content/5 shrink-0 flex items-center justify-center">
-                <img v-if="albumCoverUrl" :src="albumCoverUrl" class="w-full h-full object-cover" />
-                <IconFolder v-else class="w-3.5 h-3.5 text-base-content/30" />
-              </span>
-              <span class="min-w-0 text-[12px] font-medium text-base-content/80 break-all">{{ generalFileInfo?.album_name }}</span>
-            </div>
+            <div class="flex items-center min-w-0 text-[12px] text-base-content/75 break-all">{{ generalFileInfo?.album_name }}</div>
 
             <!-- Size -->
             <div class="flex items-center text-[11px] text-base-content/45 h-6">{{ $t('file_info.size') }}</div>
@@ -327,6 +322,7 @@
                       v-if="person.thumbnail"
                       :src="'data:image/jpeg;base64,' + person.thumbnail"
                       class="w-full h-full object-cover"
+                      draggable="false"
                     />
                     <IconPerson v-else class="w-3.5 h-3.5 text-base-content/30" />
                   </span>
@@ -478,7 +474,6 @@ import {
   combineFileName,
   isValidFileName,
   getAssetSrc,
-  getThumbUrl,
 } from '@/common/utils';
 import {
   IconClose,
@@ -524,7 +519,6 @@ const emit = defineEmits([
   'quickEditCollection',
   'quickEditComment',
   'navigateFolder',
-  'openViewer',
   'navigateMetadata',
   'navigatePerson',
 ]);
@@ -830,7 +824,6 @@ const renamingName = ref('');
 const renamingExt = ref('');
 const renameInputRef = ref<HTMLInputElement | null>(null);
 const albumRootPath = ref('');
-const albumCoverUrl = ref('');
 let albumRootRequestSeq = 0;
 
 const generalFolderBreadcrumbs = computed(() => {
@@ -849,16 +842,11 @@ watch(
   async (albumId) => {
     const requestSeq = ++albumRootRequestSeq;
     albumRootPath.value = '';
-    albumCoverUrl.value = '';
     if (!albumId) return;
     const album = await getAlbum(albumId);
     if (requestSeq !== albumRootRequestSeq) return;
     if (props.fileInfo?.album_id !== albumId) return;
     albumRootPath.value = album?.path || '';
-    const coverFileId = Number(album?.cover_file_id || 0);
-    if (coverFileId > 0) {
-      albumCoverUrl.value = getThumbUrl(coverFileId, false, config.settings.thumbnailSize);
-    }
   },
   { immediate: true }
 );

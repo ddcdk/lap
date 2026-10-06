@@ -497,7 +497,6 @@
             @quick-edit-collection="clickAddToCollection"
             @quick-edit-comment="openCommentEditor"
             @navigate-folder="handleInfoNavigateFolder"
-            @open-viewer="openSelectedInViewer"
             @navigate-metadata="handleNavigateMetadata"
             @navigate-person="handleNavigatePerson"
           />
@@ -2196,14 +2195,6 @@ const checkUnsavedChanges = (action: () => void) => {
     action();
   }
 };
-
-// Open the currently selected file in a new image viewer window (from FileInfo preview click).
-function openSelectedInViewer() {
-  if (selectedItemIndex.value < 0) return;
-  checkUnsavedChanges(() => {
-    openImageViewer(selectedItemIndex.value, true);
-  });
-}
 
 // Open a temporary view filtered by the clicked metadata (camera/lens/location).
 // Like "find related photos", the back button returns to the previous view.
