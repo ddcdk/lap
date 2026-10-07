@@ -6242,6 +6242,18 @@ watch(
   () => Boolean(isFilmstripView.value),
   (isFilmstrip) => {
     if (!isFilmstrip) stopSlideShow();
+    // Filmstrip uses flat file order; grid needs the grouped query rows again.
+    // Reload both directions so placeholders and the focused file use the
+    // correct ordering, including when switching during an in-flight load.
+    if (
+      effectiveGroupBy.value > GROUP.NONE &&
+      !isScanStreamingMode.value &&
+      tempViewMode.value === 'none' &&
+      currentQuerySource.value !== 'search'
+    ) {
+      refreshContentFromSelectionChange();
+      return;
+    }
     resetGroupingState();
     void nextTick(() => gridViewRef.value?.refreshLayout?.());
   },
