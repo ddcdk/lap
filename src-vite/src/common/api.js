@@ -1294,12 +1294,13 @@ export async function updateFileInfo(fileId, filePath) {
   return null;
 }
 
-export async function importFile(filePath, folderId, folderPath) {
+export async function importFile(filePath, folderId, folderPath, throwOnError = false, libraryId = libConfig._libraryId) {
   try {
-    const result = await invoke('import_file', { filePath, folderId, folderPath });
+    const result = await invoke('import_file', { filePath, folderId, folderPath, libraryId });
     return result;
   } catch (error) {
     console.error('importFile error:', error);
+    if (throwOnError) throw error;
     return null;
   }
 }

@@ -228,6 +228,15 @@
     "original_unavailable": "Le fichier original est indisponible",
     "requires_original": "Nécessite le fichier original. Reconnectez le périphérique de stockage."
   },
+  "import_files": {
+    "title": "Importer des fichiers",
+    "media": "Fichiers multimédias pris en charge",
+    "progress": "Importation de {processed} / {total} fichiers…",
+    "summary": "Importés : {imported} · Échecs : {failed}",
+    "formats_failed": "Impossible de charger les formats de fichiers pris en charge.",
+    "destination_unavailable": "Le dossier de destination est indisponible.",
+    "copy_failed": "Impossible d’importer ce fichier."
+  },
   "import_organize": {
     "section_folders": "Sélectionner un dossier",
     "section_status": "État de l’importation",

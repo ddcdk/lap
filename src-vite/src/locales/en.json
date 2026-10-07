@@ -228,6 +228,15 @@
     "original_unavailable": "Original file is unavailable",
     "requires_original": "Requires the original file. Reconnect the storage device to use this action."
   },
+  "import_files": {
+    "title": "Import Files",
+    "media": "Supported media files",
+    "progress": "Importing {processed} / {total} files…",
+    "summary": "Imported {imported} · Failed {failed}",
+    "formats_failed": "Could not load supported file formats.",
+    "destination_unavailable": "The destination folder is unavailable.",
+    "copy_failed": "Could not import this file."
+  },
   "import_organize": {
     "section_folders": "Select folder",
     "section_status": "Import status",

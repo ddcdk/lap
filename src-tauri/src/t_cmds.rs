@@ -1817,26 +1817,34 @@ pub fn copy_file(
 
 /// import a file into a folder preserving the original file name
 #[tauri::command]
-pub fn import_file(
-    file_path: &str,
+pub async fn import_file(
+    file_path: String,
     folder_id: i64,
-    folder_path: &str,
+    folder_path: String,
+    library_id: Option<String>,
 ) -> Result<Option<AFile>, String> {
-    // Validate the source is a supported type *before* copying.
-    t_utils::get_file_type(file_path)
-        .ok_or_else(|| format!("Unsupported file type: {}", file_path))?;
+    let library_id = library_id.unwrap_or(t_config::current_library_id()?);
+    tauri::async_runtime::spawn_blocking(move || {
+        with_current_library(&library_id, || {
+            // Validate the source is a supported type *before* copying.
+            t_utils::get_file_type(&file_path)
+                .ok_or_else(|| format!("Unsupported file type: {}", file_path))?;
 
-    let new_path = t_utils::import_file(file_path, folder_path)
-        .ok_or_else(|| format!("Failed to copy file: {}", file_path))?;
-    let file_type = t_utils::get_file_type(&new_path).ok_or_else(|| {
-        // The renamed file should have a valid extension; if not, remove
-        // the orphan so the album folder stays clean.
-        let _ = std::fs::remove_file(&new_path);
-        format!("Unsupported file type after copy: {}", new_path)
-    })?;
-    let now = chrono::Utc::now().timestamp_millis();
-    let (file, _) = AFile::add_to_db(folder_id, &new_path, file_type, now)?;
-    Ok(Some(file))
+            let new_path = t_utils::import_file(&file_path, &folder_path)
+                .ok_or_else(|| format!("Failed to copy file: {}", file_path))?;
+            let file_type = t_utils::get_file_type(&new_path).ok_or_else(|| {
+                // The renamed file should have a valid extension; if not, remove
+                // the orphan so the album folder stays clean.
+                let _ = std::fs::remove_file(&new_path);
+                format!("Unsupported file type after copy: {}", new_path)
+            })?;
+            let now = chrono::Utc::now().timestamp_millis();
+            let (file, _) = AFile::add_to_db(folder_id, &new_path, file_type, now)?;
+            Ok(Some(file))
+        })
+    })
+    .await
+    .map_err(|e| format!("Failed to import file: {}", e))?
 }
 
 /// Import media from a folder and organize it below the album root by date.

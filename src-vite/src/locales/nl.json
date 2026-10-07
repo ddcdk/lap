@@ -228,6 +228,15 @@
     "original_unavailable": "Het oorspronkelijke bestand is niet beschikbaar",
     "requires_original": "Vereist het oorspronkelijke bestand. Sluit het opslagapparaat opnieuw aan."
   },
+  "import_files": {
+    "title": "Bestanden importeren",
+    "media": "Ondersteunde mediabestanden",
+    "progress": "{processed} / {total} bestanden importeren…",
+    "summary": "Geïmporteerd: {imported} · Mislukt: {failed}",
+    "formats_failed": "De ondersteunde bestandsindelingen konden niet worden geladen.",
+    "destination_unavailable": "De doelmap is niet beschikbaar.",
+    "copy_failed": "Dit bestand kon niet worden geïmporteerd."
+  },
   "import_organize": {
     "section_folders": "Kies map",
     "section_status": "Importstatus",

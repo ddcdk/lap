@@ -228,6 +228,15 @@
     "original_unavailable": "元のファイルにアクセスできません",
     "requires_original": "元のファイルが必要です。ストレージデバイスを再接続してください。"
   },
+  "import_files": {
+    "title": "ファイルをインポート",
+    "media": "対応するメディアファイル",
+    "progress": "{processed} / {total} ファイルをインポート中…",
+    "summary": "インポート済み: {imported} · 失敗: {failed}",
+    "formats_failed": "対応するファイル形式を読み込めませんでした。",
+    "destination_unavailable": "インポート先のフォルダーを利用できません。",
+    "copy_failed": "このファイルをインポートできませんでした。"
+  },
   "import_organize": {
     "section_folders": "フォルダーを選択",
     "section_status": "インポート状況",

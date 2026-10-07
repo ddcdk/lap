@@ -228,6 +228,15 @@
     "original_unavailable": "Originaldatei nicht verfügbar",
     "requires_original": "Benötigt die Originaldatei. Verbinden Sie das Speichergerät erneut."
   },
+  "import_files": {
+    "title": "Dateien importieren",
+    "media": "Unterstützte Mediendateien",
+    "progress": "{processed} / {total} Dateien werden importiert…",
+    "summary": "Importiert: {imported} · Fehlgeschlagen: {failed}",
+    "formats_failed": "Die unterstützten Dateiformate konnten nicht geladen werden.",
+    "destination_unavailable": "Der Zielordner ist nicht verfügbar.",
+    "copy_failed": "Diese Datei konnte nicht importiert werden."
+  },
   "import_organize": {
     "section_folders": "Ordner auswählen",
     "section_status": "Importstatus",

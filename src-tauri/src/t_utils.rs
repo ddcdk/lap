@@ -1264,17 +1264,28 @@ pub fn import_file(source_path: &str, dest_folder: &str) -> Option<String> {
     let source = Path::new(source_path);
     let mut destination = PathBuf::from(dest_folder);
     destination.push(source.file_name()?);
-    let destination = get_unique_path(destination);
-
-    match fs::copy(source, &destination) {
-        Ok(_) => {
-            println!("File imported successfully: {}", destination.display());
-            destination.to_str().map(|s| s.to_string())
+    // Reserve the destination atomically; concurrent imports must never overwrite it.
+    let mut input = fs::File::open(source).ok()?;
+    let permissions = input.metadata().ok()?.permissions();
+    loop {
+        let candidate = get_unique_path(destination.clone());
+        let mut output = match fs::OpenOptions::new().write(true).create_new(true).open(&candidate) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                eprintln!("Failed to create imported file: {}", error);
+                return None;
+            }
+        };
+        let result = std::io::copy(&mut input, &mut output)
+            .and_then(|_| output.set_permissions(permissions.clone()));
+        if let Err(error) = result {
+            drop(output);
+            let _ = fs::remove_file(&candidate);
+            eprintln!("Failed to import file: {}", error);
+            return None;
         }
-        Err(e) => {
-            eprintln!("Failed to import file: {}", e);
-            None
-        }
+        return candidate.to_str().map(|path| path.to_string());
     }
 }
 
@@ -4515,5 +4526,42 @@ mod album_accessibility_cache_tests {
         cache.replace_if_current(cache.generation, HashSet::from([2]));
         cache.replace_if_current(old_generation, HashSet::from([1]));
         assert_eq!(cache.ids, HashSet::from([2]));
+    }
+}
+
+#[cfg(test)]
+mod import_file_concurrency_tests {
+    use super::import_file;
+    use std::{fs, sync::{Arc, Barrier}, thread};
+
+    #[test]
+    fn concurrent_imports_preserve_every_file_and_existing_destination() {
+        let root = std::env::temp_dir().join(format!("lap-import-test-{}", uuid::Uuid::new_v4()));
+        let destination = root.join("destination");
+        fs::create_dir_all(&destination).unwrap();
+        fs::write(destination.join("photo.jpg"), b"existing").unwrap();
+        let barrier = Arc::new(Barrier::new(16));
+        let mut workers = Vec::new();
+        for index in 0..16 {
+            let source = root.join(format!("source-{index}"));
+            fs::create_dir_all(&source).unwrap();
+            let path = source.join("photo.jpg");
+            let content = format!("photo-{index}").repeat(8192);
+            fs::write(&path, &content).unwrap();
+            let destination = destination.clone();
+            let barrier = barrier.clone();
+            workers.push(thread::spawn(move || {
+                barrier.wait();
+                let imported = import_file(path.to_str().unwrap(), destination.to_str().unwrap()).unwrap();
+                assert_eq!(fs::read_to_string(&imported).unwrap(), content);
+                imported
+            }));
+        }
+        let mut paths = std::collections::HashSet::new();
+        for worker in workers { assert!(paths.insert(worker.join().unwrap())); }
+        assert_eq!(paths.len(), 16);
+        assert_eq!(fs::read(destination.join("photo.jpg")).unwrap(), b"existing");
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 17);
+        fs::remove_dir_all(root).unwrap();
     }
 }

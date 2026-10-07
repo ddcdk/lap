@@ -228,6 +228,15 @@
     "original_unavailable": "Il file originale non è disponibile",
     "requires_original": "Richiede il file originale. Ricollega il dispositivo di archiviazione."
   },
+  "import_files": {
+    "title": "Importa file",
+    "media": "File multimediali supportati",
+    "progress": "Importazione di {processed} / {total} file…",
+    "summary": "Importati: {imported} · Non riusciti: {failed}",
+    "formats_failed": "Impossibile caricare i formati di file supportati.",
+    "destination_unavailable": "La cartella di destinazione non è disponibile.",
+    "copy_failed": "Impossibile importare questo file."
+  },
   "import_organize": {
     "section_folders": "Seleziona cartella",
     "section_status": "Stato importazione",

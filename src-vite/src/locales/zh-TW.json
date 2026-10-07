@@ -228,6 +228,15 @@
     "original_unavailable": "原始檔案暫時無法存取",
     "requires_original": "需要原始檔案，請連接儲存裝置後使用此操作。"
   },
+  "import_files": {
+    "title": "匯入檔案",
+    "media": "支援的媒體檔案",
+    "progress": "正在匯入 {processed} / {total} 個檔案…",
+    "summary": "已匯入 {imported} 個 · 失敗 {failed} 個",
+    "formats_failed": "無法讀取支援的檔案格式。",
+    "destination_unavailable": "目標資料夾無法使用。",
+    "copy_failed": "無法匯入此檔案。"
+  },
   "import_organize": {
     "section_folders": "選擇資料夾",
     "section_status": "匯入狀態",

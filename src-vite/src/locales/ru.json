@@ -228,6 +228,15 @@
     "original_unavailable": "Исходный файл недоступен",
     "requires_original": "Требуется исходный файл. Подключите устройство хранения заново."
   },
+  "import_files": {
+    "title": "Импорт файлов",
+    "media": "Поддерживаемые медиафайлы",
+    "progress": "Импорт файлов: {processed} / {total}…",
+    "summary": "Импортировано: {imported} · Ошибок: {failed}",
+    "formats_failed": "Не удалось загрузить поддерживаемые форматы файлов.",
+    "destination_unavailable": "Папка назначения недоступна.",
+    "copy_failed": "Не удалось импортировать этот файл."
+  },
   "import_organize": {
     "section_folders": "Выбор папки",
     "section_status": "Состояние импорта",

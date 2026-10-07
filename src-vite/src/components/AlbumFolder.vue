@@ -217,6 +217,7 @@ import {
   IconFolderOff,
   IconRefresh,
   IconClipboard,
+  IconDownload,
   IconHeart,
   IconHeartFilled
 } from '@/common/icons';
@@ -411,6 +412,17 @@ const getMenuItemsForFolder = async (folder: any) => {
       disabled: unavailable,
       icon: IconRename,
       action: () => { void startRenameFolder(folder); }
+    },
+    {
+      label: `${t('import_files.title')}…`,
+      icon: IconDownload,
+      disabled: unavailable,
+      action: () => {
+        void tauriEmit('import-files-to-folder', {
+          albumId: props.albumId,
+          folderPath: folder.path,
+        });
+      }
     },
     {
       label: t('menu.file.paste'),

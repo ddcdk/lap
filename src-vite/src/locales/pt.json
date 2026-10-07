@@ -228,6 +228,15 @@
     "original_unavailable": "O ficheiro original está indisponível",
     "requires_original": "Requer o ficheiro original. Volte a ligar o dispositivo de armazenamento."
   },
+  "import_files": {
+    "title": "Importar arquivos",
+    "media": "Arquivos de mídia compatíveis",
+    "progress": "Importando {processed} / {total} arquivos…",
+    "summary": "Importados: {imported} · Falhas: {failed}",
+    "formats_failed": "Não foi possível carregar os formatos de arquivo compatíveis.",
+    "destination_unavailable": "A pasta de destino está indisponível.",
+    "copy_failed": "Não foi possível importar este arquivo."
+  },
   "import_organize": {
     "section_folders": "Selecionar pasta",
     "section_status": "Status da importação",

@@ -927,6 +927,7 @@ onMounted( async () => {
         }
       }
     }
+    if (event.payload?.refreshCounts) await refreshAlbumVisibleCounts();
     refreshFolderSearchFolders();
   });
 

@@ -693,6 +693,19 @@
     @cancel="showDropWarning = false"
   />
 
+  <ModalDialog v-if="fileImportVisible" :title="$t('import_files.title')" :width="480"
+    @cancel="fileImportVisible = false">
+    <div class="text-sm break-all mb-3">{{ fileImportTarget }}</div>
+    <div v-if="isImportingFiles" role="status" aria-live="polite" class="text-sm">
+      {{ $t('import_files.progress', { processed: fileImportProcessed, total: fileImportTotal }) }}
+      <progress class="progress w-full mt-2" :value="fileImportProcessed" :max="fileImportTotal"></progress>
+    </div>
+    <div v-else class="text-sm mb-2">{{ $t('import_files.summary', { imported: fileImportSuccess, failed: fileImportErrors.length }) }}</div>
+    <div v-if="fileImportErrors.length" class="max-h-64 overflow-y-auto text-xs text-error whitespace-pre-wrap break-all select-text">
+      <div v-for="(error, index) in fileImportErrors" :key="index" class="mb-2">{{ error }}</div>
+    </div>
+  </ModalDialog>
+
   <!-- Drop overlay -->
   <div v-if="isDragOver && acceptDrops" class="drop-overlay">
     <div class="drop-overlay-content">
@@ -743,7 +756,7 @@ import { getAlbum, getAllAlbums, recountAlbum, getQueryCountAndSum, getQueryTime
          copyImages, renameFile, moveFile, moveFileOutsideLibrary, copyFile, deleteFile, deleteFilePermanently, batchDeleteFiles, editFileComment, getFileThumb, getFileThumbs, getFileInfo,
          setFileRotate, setFileFavorite, setFileRating, setFileCullingFlag, batchUpdateFileMetadata, getTagsForFile, getTagGroupName, searchSimilarImages, generateEmbedding,
          revealPath, getTagName, indexAlbum, listenIndexProgress, listenIndexFinished, setAlbumCover, setDesktopWallpaper,
-         updateFileInfo, importFile, importUrl, importFileBytes, getDragPayload, importClipboard, addFileToDb, checkFileExists, checkFileAccessibility, cancelIndexing as cancelIndexingApi, selectFolder, getFacesForFile, listenFaceIndexProgress,
+         updateFileInfo, getSupportedFormatExtensions, importFile, importUrl, importFileBytes, getDragPayload, importClipboard, addFileToDb, checkFileExists, checkFileAccessibility, cancelIndexing as cancelIndexingApi, selectFolder, getFacesForFile, listenFaceIndexProgress,
          openFilesWithApp, getAppConfig, getIndexRecoveryInfo, clearIndexRecoveryInfo, setLastSelectedItemIndex,
          dedupDelete, getQueryFilePosition, getFolderSearchExcluded,
          listCollections, createCollection, addFilesToCollection, removeFilesFromCollection, getFileCollections, getCollectionCountAndSum, getCollectionFiles, getCollectionGroupedQueryRows, getCollectionGroupFileIds, getCollectionQueryFileIds, fetchFolder, isDirectoryAccessible, checkAlbumAccessibility, addTagToFile } from '@/common/api';
@@ -778,6 +791,7 @@ import { useFileMenuItems } from '@/common/fileMenu';
 import Welcome from '@/components/Welcome.vue';
 import MediaViewer from '@/components/MediaViewer.vue';
 import MessageBox from '@/components/MessageBox.vue';
+import ModalDialog from '@/components/ModalDialog.vue';
 import RefreshFileInfoDialog from '@/components/RefreshFileInfoDialog.vue';
 import { fileInfoRevision } from '@/common/fileInfoRefresh';
 import IndexRecoveryDialog from '@/components/IndexRecoveryDialog.vue';
@@ -2716,6 +2730,88 @@ async function refreshImportedFiles(albumId: number) {
   await updateContent();
 }
 
+let fileImportDisposed = false;
+const isImportingFiles = ref(false);
+const fileImportVisible = ref(false);
+const fileImportTarget = ref('');
+const fileImportProcessed = ref(0);
+const fileImportTotal = ref(0);
+const fileImportSuccess = ref(0);
+const fileImportErrors = ref<string[]>([]);
+
+async function importFilesToFolder(target: { albumId: number; folderPath: string }) {
+  if (isImportingFiles.value) return;
+  const libraryId = libConfig._libraryId;
+  const isCurrent = () => !fileImportDisposed && libConfig._libraryId === libraryId;
+  isImportingFiles.value = true;
+  let progressTimer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const formats = await getSupportedFormatExtensions();
+    const extensions = [...formats.image, ...formats.raw, ...formats.video];
+    if (!extensions.length) throw new Error(t('import_files.formats_failed'));
+    const selected = await openDialog({
+      title: t('import_files.title'),
+      multiple: true,
+      directory: false,
+      filters: [{ name: t('import_files.media'), extensions }],
+    });
+    if (!isCurrent() || !selected || (Array.isArray(selected) && !selected.length)) return;
+    const paths = [...new Set(Array.isArray(selected) ? selected : [selected])];
+    if (!await isDirectoryAccessible(target.folderPath)) throw new Error(t('import_files.destination_unavailable'));
+    const destination = await resolveAlbumImportDestination(target.albumId, target.folderPath);
+    if (!isCurrent()) return;
+    if (!destination) throw new Error(t('import_files.destination_unavailable'));
+    fileImportTarget.value = destination.folderPath;
+    fileImportProcessed.value = 0;
+    fileImportTotal.value = paths.length;
+    fileImportSuccess.value = 0;
+    fileImportErrors.value = [];
+    fileImportVisible.value = false;
+    progressTimer = setTimeout(() => { fileImportVisible.value = true; }, 700);
+    for (const path of paths) {
+      if (!isCurrent()) return;
+      try {
+        const file = await importFile(path, destination.folderId, destination.folderPath, true, libraryId);
+        if (!file) throw new Error(t('import_files.copy_failed'));
+        fileImportSuccess.value++;
+      } catch (error) {
+        fileImportErrors.value.push(`${path}\n${String(error)}`);
+      }
+      fileImportProcessed.value++;
+    }
+    clearTimeout(progressTimer);
+    if (!isCurrent()) return;
+    if (fileImportSuccess.value > 0) {
+      const folderCounts = await getQueryCountAndSum({
+        searchFileName: '', searchFileType: config.search.fileType,
+        sortType: 0, sortOrder: 0, searchAllSubfolders: config.settings.showSubfolderFiles ? destination.folderPath : '',
+        searchFolder: config.settings.showSubfolderFiles ? '' : destination.folderPath,
+        startDate: 0, endDate: 0, calendarSort: 0, make: '', model: '', lensMake: '', lensModel: '',
+        locationAdmin1: '', locationName: '', isFavorite: false, rating: -1, cullingFlag: -1, tagId: 0, personId: 0,
+      });
+      if (!isCurrent()) return;
+      if (folderCounts) setFolderFileCount(destination.folderPath, Number(folderCounts[0] || 0));
+      await refreshAffectedAlbums([destination.albumId], true);
+      if (!isCurrent()) return;
+      await refreshLibraryTotalCount();
+      if (!isCurrent()) return;
+      await refreshImportedAlbumContent(destination.albumId);
+    }
+    if (!isCurrent()) return;
+    fileImportVisible.value = fileImportErrors.value.length > 0;
+    if (fileImportErrors.value.length) {
+      toast.warning(t('import_files.summary', { imported: fileImportSuccess.value, failed: fileImportErrors.value.length }));
+    } else {
+      toast.success(t('msgbox.drop_import.success', { count: fileImportSuccess.value }));
+    }
+  } catch (error) {
+    if (isCurrent()) toast.error(String(error));
+  } finally {
+    clearTimeout(progressTimer);
+    isImportingFiles.value = false;
+  }
+}
+
 async function pasteClipboardImage(target?: { albumId: number; folderPath?: string }) {
   if (isPastingClipboard.value) return;
   if (!target && !acceptDrops.value) {
@@ -3595,6 +3691,7 @@ let unlistenMontageAdd: (() => void) | null = null;
 let unlistenFaceIndexProgress: (() => void) | null = null;
 let unlistenLibraryTotalRefreshed: (() => void) | null = null;
 let unlistenImportFilesAdded: (() => void) | null = null;
+let unlistenImportFilesToFolder: (() => void) | null = null;
 let unlistenPasteClipboard: (() => void) | null = null;
 
 let resizeObserver: ResizeObserver | null = null;
@@ -3658,6 +3755,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  fileImportDisposed = true;
   selectionAccessRequest++;
   if (selectionAccessTimer) clearTimeout(selectionAccessTimer);
   stopSlideShow();
@@ -5375,6 +5473,11 @@ onMounted( async() => {
   unlistenImportFilesAdded = await listen('import-files-added', (event: any) => {
     void refreshImportedAlbumContent(Number(event.payload?.albumId || 0));
   });
+  unlistenImportFilesToFolder = await listen('import-files-to-folder', (event: any) => {
+    const albumId = Number(event.payload?.albumId || 0);
+    const folderPath = String(event.payload?.folderPath || '');
+    if (albumId > 0 && folderPath) void importFilesToFolder({ albumId, folderPath });
+  });
   unlistenPasteClipboard = await listen('paste-clipboard-to-folder', (event: any) => {
     const albumId = Number(event.payload?.albumId || 0);
     const folderPath = String(event.payload?.folderPath || '');
@@ -5905,6 +6008,7 @@ onBeforeUnmount(() => {
   if (unlistenFilesDeleted) unlistenFilesDeleted();
   if (unlistenAlbumUpdated) unlistenAlbumUpdated();
   if (unlistenFaceIndexProgress) unlistenFaceIndexProgress();
+  if (unlistenImportFilesToFolder) unlistenImportFilesToFolder();
   if (unlistenPasteClipboard) unlistenPasteClipboard();
   if (domDragEnter) document.removeEventListener('dragenter', domDragEnter);
   if (domDragLeave) document.removeEventListener('dragleave', domDragLeave);
@@ -8333,7 +8437,8 @@ const onRenameFile = async (newName: string) => {
   }
 }
 
-const refreshAffectedAlbums = async (albumIds: Array<number | null | undefined>) => {
+const refreshAffectedAlbums = async (albumIds: Array<number | null | undefined>, refreshCounts = false) => {
+  const libraryId = libConfig._libraryId;
   const uniqueAlbumIds = Array.from(
     new Set(
       albumIds
@@ -8348,8 +8453,8 @@ const refreshAffectedAlbums = async (albumIds: Array<number | null | undefined>)
     await Promise.all(uniqueAlbumIds.map((albumId) => recountAlbum(albumId)))
   ).filter(Boolean);
 
-  if (albums.length > 0) {
-    await tauriEmit('albums-refreshed', { albums, refreshFolders: false });
+  if (albums.length > 0 && libConfig._libraryId === libraryId) {
+    await tauriEmit('albums-refreshed', { albums, refreshFolders: false, refreshCounts });
   }
 };
 

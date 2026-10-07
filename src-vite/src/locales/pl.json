@@ -228,6 +228,15 @@
     "original_unavailable": "Oryginalny plik jest niedostępny",
     "requires_original": "Wymaga oryginalnego pliku. Podłącz ponownie urządzenie pamięci masowej."
   },
+  "import_files": {
+    "title": "Importuj pliki",
+    "media": "Obsługiwane pliki multimedialne",
+    "progress": "Importowanie {processed} / {total} plików…",
+    "summary": "Zaimportowano: {imported} · Niepowodzenia: {failed}",
+    "formats_failed": "Nie udało się wczytać obsługiwanych formatów plików.",
+    "destination_unavailable": "Folder docelowy jest niedostępny.",
+    "copy_failed": "Nie udało się zaimportować tego pliku."
+  },
   "import_organize": {
     "section_folders": "Wybierz folder",
     "section_status": "Stan importu",

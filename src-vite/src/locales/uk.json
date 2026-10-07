@@ -228,6 +228,15 @@
     "original_unavailable": "Оригінальний файл недоступний",
     "requires_original": "Потрібен оригінальний файл. Підключіть пристрій зберігання знову."
   },
+  "import_files": {
+    "title": "Імпорт файлів",
+    "media": "Підтримувані медіафайли",
+    "progress": "Імпорт файлів: {processed} / {total}…",
+    "summary": "Імпортовано: {imported} · Помилок: {failed}",
+    "formats_failed": "Не вдалося завантажити підтримувані формати файлів.",
+    "destination_unavailable": "Папка призначення недоступна.",
+    "copy_failed": "Не вдалося імпортувати цей файл."
+  },
   "import_organize": {
     "section_folders": "Виберіть теку",
     "section_status": "Стан імпорту",

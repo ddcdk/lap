@@ -228,6 +228,15 @@
     "original_unavailable": "Az eredeti fájl nem érhető el",
     "requires_original": "Az eredeti fájl szükséges. Csatlakoztassa újra a tárolóeszközt."
   },
+  "import_files": {
+    "title": "Fájlok importálása",
+    "media": "Támogatott médiafájlok",
+    "progress": "{processed} / {total} fájl importálása…",
+    "summary": "Importálva: {imported} · Sikertelen: {failed}",
+    "formats_failed": "Nem sikerült betölteni a támogatott fájlformátumokat.",
+    "destination_unavailable": "A célmappa nem érhető el.",
+    "copy_failed": "Nem sikerült importálni ezt a fájlt."
+  },
   "import_organize": {
     "section_folders": "Mappa kiválasztása",
     "section_status": "Importálás állapota",

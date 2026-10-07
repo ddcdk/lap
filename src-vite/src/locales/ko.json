@@ -228,6 +228,15 @@
     "original_unavailable": "원본 파일에 접근할 수 없습니다",
     "requires_original": "원본 파일이 필요합니다. 저장 장치를 다시 연결하세요."
   },
+  "import_files": {
+    "title": "파일 가져오기",
+    "media": "지원되는 미디어 파일",
+    "progress": "파일 {processed} / {total}개 가져오는 중…",
+    "summary": "가져옴: {imported}개 · 실패: {failed}개",
+    "formats_failed": "지원되는 파일 형식을 불러올 수 없습니다.",
+    "destination_unavailable": "대상 폴더를 사용할 수 없습니다.",
+    "copy_failed": "이 파일을 가져올 수 없습니다."
+  },
   "import_organize": {
     "section_folders": "폴더 선택",
     "section_status": "가져오기 상태",
