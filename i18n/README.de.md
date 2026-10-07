@@ -37,6 +37,7 @@ brew install --cask lap
 <p align="center">
   <img src="../docs/public/screenshots/lap_library.png" alt="Lokaler Fotobibliotheksmanager Lap" width="900">
   <img src="../docs/public/screenshots/lap_map_view.png" alt="Kartenansicht von Lap" width="900">
+  <img src="../docs/public/screenshots/lap_montage.png" alt="Fotocollage in Lap" width="900">
 </p>
 
 ## Warum Lap
@@ -49,21 +50,21 @@ brew install --cask lap
 
 ## Funktionen
 
-- **Flexible Bibliotheksansichten** nach Datum, Ordner, Ort, Kamera, Objektiv, Tags, Bewertungen und Gesichtern, mit zufälliger Sortierung und Filter für kleine Bilder.
-- **Interaktive Kartenansicht** für Fotos und Videos mit Standortdaten, gruppiert nach den aktuellen Filtern.
-- **Intelligente Alben** speichern regelbasierte Ansichten mit eigener Gruppierung und Sortierung.
-- **Sammlungen und Tags** zum gemeinsamen Organisieren ausgewählter Dateien, ohne Originale zu verschieben oder zu kopieren.
+- **Flexible Bibliotheksansichten** nach Datum, Ordner, Ort, Kamera, Objektiv, Tags, Bewertungen und Gesichtern, mit Sortierung und Suche.
+- **Ordnerbasierter Workflow** mit mehreren Bibliotheken, Import/Export per Drag-and-drop oder Zwischenablage, Dateisystemsynchronisierung und sicheren Dateiaktionen.
 - **Lokale KI-Suche** mit Textanfragen, visueller Ähnlichkeit, Motiven, Gesichtsgruppierung und optionaler Suche in über 50 Sprachen.
+- **Intelligente Alben** speichern regelbasierte Ansichten mit eigener Gruppierung und Sortierung.
+- **Import nach Datum** in Tages-, Monats-, Jahres- oder einzelne Ordner, mit ursprünglichen Dateinamen und Überspringen von Duplikaten.
+- **Sammlungen und Tags** zum gemeinsamen Organisieren ausgewählter Dateien, ohne Originale zu verschieben oder zu kopieren.
+- **Duplikatbereinigung** mit Übersicht des freigebbaren Speicherplatzes und gruppenübergreifendem Löschen.
+- **Auswahl- und Vergleichswerkzeuge** mit einem Bildvergleich in vier Bereichen.
+- **Integrierte Bearbeitung** zum Zuschneiden, Geradedrehen in beliebigen Winkeln, Drehen, Spiegeln, Skalieren und für grundlegende Bildanpassungen.
+- **Fotocollage** zum Zusammenstellen ausgewählter Fotos als Raster, bündiges Mosaik oder Fotostapel.
 - **Apple Live Photos und Google Motion Photos** mit Bewegungswiedergabe und gemeinsamem Filter für intelligente Alben.
 - **RAW + JPEG/HEIC-Paare** als ein Eintrag, dessen zugehörige Dateien bei Dateiaktionen zusammenbleiben.
-- **Wählbare RAW-Miniaturen und Vorschauen** aus RAW-Rendering oder eingebetteter Kameravorschau.
-- **Ordnerbasierter Workflow** mit mehreren Bibliotheken, Import per Drag-and-drop oder Zwischenablage, Dateisystemsynchronisierung und sicheren Dateiaktionen.
-- **Import nach Datum** in Tages-, Monats-, Jahres- oder einzelne Ordner, mit ursprünglichen Dateinamen und Überspringen von Duplikaten.
-- **Auswahl- und Vergleichswerkzeuge** mit einem Bildvergleich in vier Bereichen.
-- **Duplikatbereinigung** mit Übersicht des freigebbaren Speicherplatzes und gruppenübergreifendem Löschen.
-- **Anpassbare Anzeige** mit Miniaturen bis 1024 px, einstellbarer Rastergröße und Ecken sowie Schnellvorschau oder separaten Anzeigefenstern.
-- **Desktop-Integration** mit mehreren externen Apps und Hintergrundbildauswahl unter macOS, Windows und GNOME Linux.
-- **Integrierte Bearbeitung** zum Zuschneiden, Drehen, Spiegeln, Skalieren und für grundlegende Bildanpassungen.
+- **Wählbare RAW-Miniaturen und Vorschauen** aus RAW-Rendering oder eingebetteter Kameravorschau, mit einstellbarer Helligkeit und Anzeige von RAW+JPEG-Paaren.
+- **Interaktive Kartenansicht** für Fotos und Videos mit Standortdaten, gruppiert nach den aktuellen Filtern.
+- **Offline-Albenansicht** hält Alben auf getrennten oder Netzwerkspeichern mit zwischengespeicherten Miniaturen sichtbar.
 - **Breite Formatunterstützung** für über 60 Foto-, RAW- und Videoformate.
 
 ## Metadaten, Sammlungen und das Verschieben von Dateien

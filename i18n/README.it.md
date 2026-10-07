@@ -37,6 +37,7 @@ brew install --cask lap
 <p align="center">
   <img src="../docs/public/screenshots/lap_library.png" alt="Gestore locale di raccolte fotografiche Lap" width="900">
   <img src="../docs/public/screenshots/lap_map_view.png" alt="Vista mappa di Lap" width="900">
+  <img src="../docs/public/screenshots/lap_montage.png" alt="Collage fotografico di Lap" width="900">
 </p>
 
 ## Perché Lap
@@ -49,21 +50,21 @@ brew install --cask lap
 
 ## Funzionalità
 
-- **Navigazione flessibile della raccolta** per data, cartella, posizione, fotocamera, obiettivo, tag, valutazioni e volti, con ordinamento casuale e filtro per le immagini di piccole dimensioni.
-- **Vista mappa interattiva** per esplorare foto e video geolocalizzati raggruppati in cluster che seguono i filtri attivi.
-- **Album intelligenti** che salvano viste basate su regole, con raggruppamento e ordinamento personalizzati.
-- **Raccolte e tag** per organizzare in blocco i file selezionati senza spostare o duplicare gli originali.
+- **Navigazione flessibile della raccolta** per data, cartella, posizione, fotocamera, obiettivo, tag, valutazioni e volti, con ordinamento e ricerca.
+- **Flusso di lavoro incentrato sulle cartelle** con raccolte multiple, importazione/esportazione tramite trascinamento, importazione/esportazione con copia-incolla, sincronizzazione del file system e operazioni sicure di spostamento, copia ed eliminazione.
 - **Ricerca IA locale** con prompt di testo, similarità visiva, soggetti, raggruppamento dei volti e ricerca multilingue facoltativa in oltre 50 lingue.
+- **Album intelligenti** che salvano viste basate su regole, con raggruppamento e ordinamento personalizzati.
+- **Importazione organizzata per data** con struttura per giorno, mese, anno o cartella singola, nomi file originali e salto dei duplicati.
+- **Raccolte e tag** per organizzare in blocco i file selezionati senza spostare o duplicare gli originali.
+- **Pulizia dei duplicati** con riepilogo dello spazio recuperabile ed eliminazione in blocco tra i gruppi di duplicati.
+- **Strumenti di selezione e confronto**, incluso un visualizzatore per il confronto delle immagini a quattro riquadri.
+- **Modifica integrata** per ritaglio, raddrizzamento ad angolo arbitrario, rotazione, riflesso, ridimensionamento e regolazioni di base delle immagini.
+- **Collage fotografico** per comporre le foto selezionate in un collage a griglia, a mosaico giustificato o a pila di foto.
 - **Apple Live Photos e Google Motion Photos** con riproduzione del movimento e un filtro unificato per gli album intelligenti.
 - **Coppie RAW + JPEG/HEIC** mostrate come un unico elemento, con i file collegati mantenuti insieme durante le operazioni sui file.
-- **Miniature e anteprime RAW configurabili**, generate dal rendering RAW o dall'anteprima integrata della fotocamera.
-- **Flusso di lavoro incentrato sulle cartelle** con raccolte multiple, importazione tramite trascinamento, importazione con copia-incolla, sincronizzazione del file system e operazioni sicure di spostamento, copia ed eliminazione.
-- **Importazione organizzata per data** con struttura per giorno, mese, anno o cartella singola, nomi file originali e salto dei duplicati.
-- **Strumenti di selezione e confronto**, incluso un visualizzatore per il confronto delle immagini a quattro riquadri.
-- **Pulizia dei duplicati** con riepilogo dello spazio recuperabile ed eliminazione in blocco tra i gruppi di duplicati.
-- **Visualizzazione personalizzabile** con miniature fino a 1024 px, dimensioni della griglia e arrotondamento degli angoli regolabili, anteprima rapida o finestre di visualizzazione separate.
-- **Integrazione con il desktop** tramite diverse app esterne e selezione dello sfondo su macOS, Windows e GNOME Linux.
-- **Modifica integrata** per ritaglio, rotazione, riflesso, ridimensionamento e regolazioni di base delle immagini.
+- **Miniature e anteprime RAW configurabili**, generate dal rendering RAW o dall'anteprima integrata della fotocamera, con luminosità regolabile e visualizzazione delle coppie RAW+JPEG.
+- **Vista mappa interattiva** per esplorare foto e video geolocalizzati raggruppati in cluster che seguono i filtri attivi.
+- **Navigazione degli album offline** che mantiene visibili gli album su archivi disconnessi o di rete con miniature memorizzate nella cache.
 - **Ampio supporto ai formati** per oltre 60 formati fotografici, RAW e video.
 
 ## Metadati, raccolte e spostamento dei file

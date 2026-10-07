@@ -431,7 +431,7 @@ onBeforeUnmount(() => {
   .VPHero .image-container::after {
     right: -5%;
     bottom: 6%;
-    background-image: url('/screenshots/lap-home3.png');
+    background-image: url('/screenshots/lap_montage.png');
     transform:
       rotateX(calc(2deg + var(--hero-tilt-y) * 2deg))
       rotateY(calc(-18deg + var(--hero-tilt-x) * 4deg))

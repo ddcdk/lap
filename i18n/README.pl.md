@@ -37,6 +37,7 @@ brew install --cask lap
 <p align="center">
   <img src="../docs/public/screenshots/lap_library.png" alt="Lap — lokalny menedżer biblioteki zdjęć" width="900">
   <img src="../docs/public/screenshots/lap_map_view.png" alt="Widok mapy w Lap" width="900">
+  <img src="../docs/public/screenshots/lap_montage.png" alt="Kolaż zdjęć w Lap" width="900">
 </p>
 
 ## Dlaczego Lap
@@ -49,21 +50,21 @@ brew install --cask lap
 
 ## Funkcje
 
-- **Elastyczne przeglądanie biblioteki** według daty, folderu, lokalizacji, aparatu, obiektywu, tagów, ocen i twarzy, z sortowaniem losowym i filtrem małych zdjęć.
-- **Interaktywny widok mapy** do eksplorowania zdjęć i filmów z geotagami w klastrach zgodnych z bieżącymi filtrami.
-- **Inteligentne albumy** zapisują widoki oparte na regułach z niestandardowym grupowaniem i sortowaniem.
-- **Kolekcje i tagi** do masowego porządkowania wybranych plików bez przenoszenia lub duplikowania oryginałów.
+- **Elastyczne przeglądanie biblioteki** według daty, folderu, lokalizacji, aparatu, obiektywu, tagów, ocen i twarzy, z sortowaniem i wyszukiwaniem.
+- **Praca oparta na folderach** z wieloma bibliotekami, importem/eksportem przez przeciąganie i upuszczanie, importem/eksportem przez kopiowanie-wklejanie, synchronizacją z systemem plików oraz bezpiecznymi operacjami przenoszenia/kopiowania/usuwania.
 - **Lokalne wyszukiwanie AI** dla zapytań tekstowych, podobieństwa wizualnego, tematów, grupowania twarzy oraz opcjonalnego wyszukiwania wielojęzycznego w ponad 50 językach.
+- **Inteligentne albumy** zapisują widoki oparte na regułach z niestandardowym grupowaniem i sortowaniem.
+- **Import z organizacją wg dat** z układami dziennym, miesięcznym, rocznym lub jednym folderem, oryginalnymi nazwami plików i pomijaniem duplikatów.
+- **Kolekcje i tagi** do masowego porządkowania wybranych plików bez przenoszenia lub duplikowania oryginałów.
+- **Czyszczenie duplikatów** z podsumowaniami odzyskiwanej przestrzeni i masowym usuwaniem w zbiorach duplikatów.
+- **Narzędzia selekcji i porównywania**, w tym przeglądarka porównania obrazów w czterech panelach.
+- **Wbudowana edycja** do kadrowania, prostowania pod dowolnym kątem, obracania, odbijania, zmiany rozmiaru i podstawowych korekt zdjęć.
+- **Kolaż zdjęć** do komponowania wybranych zdjęć w kolaże: siatkę, wyrównaną mozaikę lub stos zdjęć.
 - **Apple Live Photos i Google Motion Photos** z odtwarzaniem ruchu oraz ujednoliconym filtrem inteligentnych albumów.
 - **Pary RAW + JPEG/HEIC** wyświetlane jako jeden element, z powiązanymi plikami utrzymywanymi razem podczas operacji na plikach.
-- **Konfigurowalne miniatury i podglądy RAW** przy użyciu renderowania RAW lub osadzonego podglądu z aparatu.
-- **Praca oparta na folderach** z wieloma bibliotekami, importem przez przeciąganie i upuszczanie, importem przez kopiowanie-wklejanie, synchronizacją z systemem plików oraz bezpiecznymi operacjami przenoszenia/kopiowania/usuwania.
-- **Import z organizacją wg dat** z układami dziennym, miesięcznym, rocznym lub jednym folderem, oryginalnymi nazwami plików i pomijaniem duplikatów.
-- **Narzędzia selekcji i porównywania**, w tym przeglądarka porównania obrazów w czterech panelach.
-- **Czyszczenie duplikatów** z podsumowaniami odzyskiwanej przestrzeni i masowym usuwaniem w zbiorach duplikatów.
-- **Konfigurowalne wyświetlanie** z miniaturami do 1024 px, regulowanymi rozmiarami i narożnikami siatki oraz szybkim podglądem lub oddzielnymi oknami przeglądarki.
-- **Integracja z pulpitem** z wieloma aplikacjami zewnętrznymi i wyborem tapety w systemach macOS, Windows i GNOME Linux.
-- **Wbudowana edycja** do kadrowania, obracania, odbijania, zmiany rozmiaru i podstawowych korekt zdjęć.
+- **Konfigurowalne miniatury i podglądy RAW** przy użyciu renderowania RAW lub osadzonego podglądu z aparatu, z regulowaną jasnością i wyświetlaniem par RAW+JPEG.
+- **Interaktywny widok mapy** do eksplorowania zdjęć i filmów z geotagami w klastrach zgodnych z bieżącymi filtrami.
+- **Przeglądanie albumów offline**, dzięki któremu albumy na odłączonych lub sieciowych nośnikach pozostają widoczne wraz z buforowanymi miniaturami.
 - **Szeroka obsługa formatów** — ponad 60 formatów zdjęć, RAW i wideo.
 
 ## Metadane, kolekcje i przenoszenie plików

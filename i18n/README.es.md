@@ -37,6 +37,7 @@ brew install --cask lap
 <p align="center">
   <img src="../docs/public/screenshots/lap_library.png" alt="Gestor local de biblioteca de fotos Lap" width="900">
   <img src="../docs/public/screenshots/lap_map_view.png" alt="Vista de mapa de Lap" width="900">
+  <img src="../docs/public/screenshots/lap_montage.png" alt="Collage de fotos de Lap" width="900">
 </p>
 
 ## Por qué elegir Lap
@@ -49,21 +50,21 @@ brew install --cask lap
 
 ## Características
 
-- **Exploración flexible** por fecha, carpeta, ubicación, cámara, objetivo, etiquetas, valoraciones y rostros, con orden aleatorio y filtro de imágenes pequeñas.
-- **Vista de mapa interactiva** para explorar fotos y vídeos geolocalizados en grupos que respetan los filtros actuales.
-- **Álbumes inteligentes** para guardar vistas basadas en reglas con agrupación y orden personalizados.
-- **Colecciones y etiquetas** para organizar archivos seleccionados en bloque sin mover ni duplicar los originales.
+- **Exploración flexible** por fecha, carpeta, ubicación, cámara, objetivo, etiquetas, valoraciones y rostros, con orden y búsqueda.
+- **Flujo basado en carpetas** con varias bibliotecas, importación y exportación mediante arrastrar y soltar o copiar y pegar, sincronización y operaciones de archivos seguras.
 - **Búsqueda con IA local** mediante texto, similitud visual, temas, agrupación de rostros y búsqueda opcional en más de 50 idiomas.
+- **Álbumes inteligentes** para guardar vistas basadas en reglas con agrupación y orden personalizados.
+- **Importación organizada por fecha** en carpetas diarias, mensuales, anuales o una sola carpeta, conservando los nombres originales y omitiendo duplicados.
+- **Colecciones y etiquetas** para organizar archivos seleccionados en bloque sin mover ni duplicar los originales.
+- **Limpieza de duplicados** con resumen del espacio recuperable y eliminación en bloque entre grupos.
+- **Herramientas de selección y comparación** con un visor de imágenes de cuatro paneles.
+- **Edición integrada** para recortar, enderezar en cualquier ángulo, girar, voltear, redimensionar y realizar ajustes básicos.
+- **Collage de fotos** para componer collages en cuadrícula, mosaico justificado o pila de fotos con las fotos seleccionadas.
 - **Apple Live Photos y Google Motion Photos** con reproducción del movimiento y un filtro común en los álbumes inteligentes.
 - **Pares RAW + JPEG/HEIC** mostrados como un solo elemento, manteniendo juntos los archivos vinculados durante las operaciones.
-- **Miniaturas y vistas previas RAW configurables** mediante revelado RAW o la vista previa integrada de la cámara.
-- **Flujo basado en carpetas** con varias bibliotecas, importación mediante arrastrar y soltar o copiar y pegar, sincronización y operaciones de archivos seguras.
-- **Importación organizada por fecha** en carpetas diarias, mensuales, anuales o una sola carpeta, conservando los nombres originales y omitiendo duplicados.
-- **Herramientas de selección y comparación** con un visor de imágenes de cuatro paneles.
-- **Limpieza de duplicados** con resumen del espacio recuperable y eliminación en bloque entre grupos.
-- **Visualización personalizable** con miniaturas de hasta 1024 px, tamaño de cuadrícula y esquinas ajustables, y vista previa rápida o ventanas independientes.
-- **Integración con el escritorio** con varias aplicaciones externas y selección de fondo de pantalla en macOS, Windows y GNOME Linux.
-- **Edición integrada** para recortar, girar, voltear, redimensionar y realizar ajustes básicos.
+- **Miniaturas y vistas previas RAW configurables** mediante revelado RAW o la vista previa integrada de la cámara, con brillo ajustable y visualización de pares RAW+JPEG.
+- **Vista de mapa interactiva** para explorar fotos y vídeos geolocalizados en grupos que respetan los filtros actuales.
+- **Exploración de álbumes sin conexión** que mantiene visibles los álbumes en almacenamiento desconectado o de red con miniaturas en caché.
 - **Amplia compatibilidad** con más de 60 formatos de fotos, RAW y vídeo.
 
 ## Metadatos, colecciones y movimiento de archivos

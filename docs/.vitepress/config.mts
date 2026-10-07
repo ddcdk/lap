@@ -22,7 +22,7 @@ export default defineConfig({
         ]
     ],
     themeConfig: {
-        logo: '/logo.png',
+        logo: '/icon.png',
         nav: [
             { text: 'Home', link: '/' },
             { text: 'Guide', link: '/guide/introduction' },

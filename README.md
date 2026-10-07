@@ -40,6 +40,7 @@ brew install --cask lap
 <p align="center">
   <img src="docs/public/screenshots/lap_library.png" alt="Lap local photo library manager" width="900">
   <img src="docs/public/screenshots/lap_map_view.png" alt="Lap map view" width="900">
+  <img src="docs/public/screenshots/lap_montage.png" alt="Lap photo collage" width="900">
 </p>
 
 ## Why Lap
@@ -52,21 +53,21 @@ brew install --cask lap
 
 ## Features
 
-- **Flexible library browsing** by date, folder, location, camera, lens, tags, ratings, and faces, with random sorting and a small-image filter.
-- **Interactive Map View** to explore geotagged photos and videos in clusters that follow your current filters.
-- **Smart Albums** save rule-based views with custom grouping and sorting.
-- **Collections and tags** to organize selected files in bulk without moving or duplicating the originals.
+- **Flexible library browsing** by date, folder, location, camera, lens, tags, ratings, and faces, with sorting and search.
+- **Folder-first workflow** with multiple libraries, drag-&-drop import/export, copy-paste import/export, filesystem sync, and safe move/copy/delete operations.
 - **Local AI search** for text prompts, visual similarity, subjects, face clustering, and optional multilingual search in 50+ languages.
+- **Smart Albums** save rule-based views with custom grouping and sorting.
+- **Date-organized import** with day, month, year, or single-folder layouts, original filenames, and duplicate skipping.
+- **Collections and tags** to organize selected files in bulk without moving or duplicating the originals.
+- **Duplicate cleanup** with reclaimable-space summaries and bulk removal across duplicate sets.
+- **Culling and comparison tools** including a four-pane image comparison viewer.
+- **Built-in editing** for crop, arbitrary-angle straighten, rotate, flip, resize, and basic image adjustments.
+- **Photo Collage** to compose selected photos into grid, justified-mosaic, or picture-pile layouts.
 - **Apple Live Photos and Google Motion Photos** with motion playback and a unified Smart Album filter.
 - **RAW + JPEG/HEIC pairs** displayed as one item, with linked files kept together during file operations.
-- **Configurable RAW thumbnails and previews** using RAW rendering or the camera's embedded preview.
-- **Folder-first workflow** with multiple libraries, drag-and-drop import, copy-paste import, filesystem sync, and safe move/copy/delete operations.
-- **Date-organized import** with day, month, year, or single-folder layouts, original filenames, and duplicate skipping.
-- **Culling and comparison tools** including a four-pane image comparison viewer.
-- **Duplicate cleanup** with reclaimable-space summaries and bulk removal across duplicate sets.
-- **Customizable viewing** with thumbnails up to 1024 px, adjustable grid sizes and corners, and Quick Preview or separate viewer windows.
-- **Desktop integration** with multiple external apps and wallpaper selection on macOS, Windows, and GNOME Linux.
-- **Built-in editing** for crop, rotate, flip, resize, and basic image adjustments.
+- **Configurable RAW thumbnails and previews** using RAW rendering or the camera's embedded preview, with adjustable brightness and RAW+JPEG pair display.
+- **Interactive Map View** to explore geotagged photos and videos in clusters that follow your current filters.
+- **Offline album browsing** that keeps albums on disconnected or network storage visible with cached thumbnails.
 - **Broad format support** for 60+ photo, RAW, and video formats.
 
 ## Metadata, Collections, and Moving Files

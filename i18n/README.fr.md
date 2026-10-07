@@ -37,6 +37,7 @@ brew install --cask lap
 <p align="center">
   <img src="../docs/public/screenshots/lap_library.png" alt="Gestionnaire de photothèque locale Lap" width="900">
   <img src="../docs/public/screenshots/lap_map_view.png" alt="Vue carte de Lap" width="900">
+  <img src="../docs/public/screenshots/lap_montage.png" alt="Collage de photos dans Lap" width="900">
 </p>
 
 ## Pourquoi Lap
@@ -49,21 +50,21 @@ brew install --cask lap
 
 ## Fonctionnalités
 
-- **Navigation flexible** par date, dossier, lieu, appareil, objectif, tags, notes et visages, avec tri aléatoire et filtre des petites images.
-- **Carte interactive** pour explorer les photos et vidéos géolocalisées, regroupées selon les filtres actifs.
-- **Albums intelligents** pour enregistrer des vues basées sur des règles, avec regroupement et tri personnalisés.
-- **Collections et tags** pour organiser les fichiers sélectionnés par lot sans déplacer ni dupliquer les originaux.
+- **Navigation flexible** par date, dossier, lieu, appareil, objectif, tags, notes et visages, avec tri et recherche.
+- **Organisation par dossiers** avec plusieurs bibliothèques, import/export par glisser-déposer ou copier-coller, synchronisation et opérations de fichiers sécurisées.
 - **Recherche par IA locale** par texte, similarité visuelle, sujets et regroupement de visages, avec recherche multilingue optionnelle dans plus de 50 langues.
+- **Albums intelligents** pour enregistrer des vues basées sur des règles, avec regroupement et tri personnalisés.
+- **Import organisé par date** dans des dossiers par jour, mois, année ou un dossier unique, en conservant les noms d’origine et en ignorant les doublons.
+- **Collections et tags** pour organiser les fichiers sélectionnés par lot sans déplacer ni dupliquer les originaux.
+- **Nettoyage des doublons** avec estimation de l’espace récupérable et suppression par lot dans plusieurs groupes.
+- **Outils de sélection et de comparaison** avec une visionneuse à quatre volets.
+- **Édition intégrée** pour recadrer, redresser à un angle quelconque, pivoter, retourner, redimensionner et effectuer des ajustements de base.
+- **Collage de photos** pour assembler les photos sélectionnées en grille, en mosaïque justifiée ou en pile de photos.
 - **Apple Live Photos et Google Motion Photos** avec lecture animée et filtre commun dans les albums intelligents.
 - **Paires RAW + JPEG/HEIC** affichées comme un seul élément, dont les fichiers liés restent ensemble lors des opérations.
-- **Miniatures et aperçus RAW configurables** à partir du rendu RAW ou de l’aperçu intégré de l’appareil.
-- **Organisation par dossiers** avec plusieurs bibliothèques, import par glisser-déposer ou copier-coller, synchronisation et opérations de fichiers sécurisées.
-- **Import organisé par date** dans des dossiers par jour, mois, année ou un dossier unique, en conservant les noms d’origine et en ignorant les doublons.
-- **Outils de sélection et de comparaison** avec une visionneuse à quatre volets.
-- **Nettoyage des doublons** avec estimation de l’espace récupérable et suppression par lot dans plusieurs groupes.
-- **Affichage personnalisable** avec miniatures jusqu’à 1024 px, taille de grille et coins réglables, aperçu rapide ou fenêtres séparées.
-- **Intégration au bureau** avec plusieurs applications externes et choix du fond d’écran sur macOS, Windows et GNOME Linux.
-- **Édition intégrée** pour recadrer, pivoter, retourner, redimensionner et effectuer des ajustements de base.
+- **Miniatures et aperçus RAW configurables** à partir du rendu RAW ou de l’aperçu intégré de l’appareil, avec luminosité réglable et affichage des paires RAW+JPEG.
+- **Carte interactive** pour explorer les photos et vidéos géolocalisées, regroupées selon les filtres actifs.
+- **Navigation hors ligne des albums** qui garde les albums sur un stockage déconnecté ou réseau visibles avec des miniatures en cache.
 - **Large compatibilité** avec plus de 60 formats photo, RAW et vidéo.
 
 ## Métadonnées, collections et déplacement de fichiers

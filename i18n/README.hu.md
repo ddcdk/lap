@@ -37,6 +37,7 @@ brew install --cask lap
 <p align="center">
   <img src="../docs/public/screenshots/lap_library.png" alt="A Lap helyi fotókönyvtár-kezelője" width="900">
   <img src="../docs/public/screenshots/lap_map_view.png" alt="A Lap térképnézete" width="900">
+  <img src="../docs/public/screenshots/lap_montage.png" alt="Lap fotókollázs" width="900">
 </p>
 
 ## Miért a Lap?
@@ -49,21 +50,21 @@ brew install --cask lap
 
 ## Funkciók
 
-- **Rugalmas könyvtárböngészés** dátum, mappa, helyszín, fényképezőgép, objektív, címkék, értékelések és arcok szerint, véletlenszerű rendezéssel és kis képek szűrőjével.
-- **Interaktív térképnézet** a földrajzi címkével ellátott fényképek és videók felfedezéséhez, az aktuális szűrők szerinti csoportosításban.
-- **Intelligens albumok** mentenek szabályalapú nézeteket egyéni csoportosítással és rendezéssel.
-- **Gyűjtemények és címkék** a kiválasztott fájlok tömeges rendszerezéséhez, az eredeti fájlok áthelyezése vagy duplikálása nélkül.
+- **Rugalmas könyvtárböngészés** dátum, mappa, helyszín, fényképezőgép, objektív, címkék, értékelések és arcok szerint, rendezéssel és kereséssel.
+- **Mappaközpontú munkafolyamat** több könyvtárral, fogd-és-vidd importálással/exportálással, másolás–beillesztés importálással/exportálással, fájlrendszer-szinkronizálással, valamint biztonságos áthelyezési, másolási és törlési műveletekkel.
 - **Helyi AI-keresés** szöveges lekérdezésekhez, vizuális hasonlósághoz, témákhoz, arccsoportosításhoz, valamint opcionális többnyelvű kereséshez több mint 50 nyelven.
+- **Intelligens albumok** mentenek szabályalapú nézeteket egyéni csoportosítással és rendezéssel.
+- **Dátum szerinti importálás** napi, havi, éves vagy egyetlen mappás elrendezéssel, eredeti fájlnevekkel és a duplikátumok kihagyásával.
+- **Gyűjtemények és címkék** a kiválasztott fájlok tömeges rendszerezéséhez, az eredeti fájlok áthelyezése vagy duplikálása nélkül.
+- **Duplikátum-tisztítás** a felszabadítható hely összegzésével és tömeges eltávolítással a duplikátumcsoportokon át.
+- **Válogatási és összehasonlítási eszközök**, beleértve egy négynézetes képushasonlító megjelenítőt.
+- **Beépített szerkesztés** vágáshoz, tetszőleges szögű kiegyenesítéshez, forgatáshoz, tükrözéshez, átméretezéshez és alapvető képmódosításokhoz.
+- **Fotókollázs** a kiválasztott fényképek rácsos, sorkizárt mozaik vagy képhalom elrendezésű összeállításához.
 - **Apple Live Photos és Google Motion Photos** mozgáslejátszással és egységes intelligensalbum-szűrővel.
 - **RAW + JPEG/HEIC párok** egyetlen elemként megjelenítve, a kapcsolódó fájlok a fájlműveletek során együtt maradnak.
-- **Konfigurálható RAW-bélyegképek és előnézetek** RAW-rendereléssel vagy a fényképezőgép beágyazott előnézetének használatával.
-- **Mappaközpontú munkafolyamat** több könyvtárral, fogd-és-vidd importálással, másolás–beillesztés importálással, fájlrendszer-szinkronizálással, valamint biztonságos áthelyezési, másolási és törlési műveletekkel.
-- **Dátum szerinti importálás** napi, havi, éves vagy egyetlen mappás elrendezéssel, eredeti fájlnevekkel és a duplikátumok kihagyásával.
-- **Válogatási és összehasonlítási eszközök**, beleértve egy négynézetes képushasonlító megjelenítőt.
-- **Duplikátum-tisztítás** a felszabadítható hely összegzésével és tömeges eltávolítással a duplikátumcsoportokon át.
-- **Testreszabható megjelenítés** akár 1024 képpontos bélyegképekkel, állítható rács- és sarokméretekkel, valamint Gyors előnézettel vagy különálló megjelenítőablakokkal.
-- **Asztali integráció** több külső alkalmazással és háttérkép-kiválasztással macOS, Windows és GNOME Linux rendszereken.
-- **Beépített szerkesztés** vágáshoz, forgatáshoz, tükrözéshez, átméretezéshez és alapvető képmódosításokhoz.
+- **Konfigurálható RAW-bélyegképek és előnézetek** RAW-rendereléssel vagy a fényképezőgép beágyazott előnézetének használatával, állítható fényerővel és RAW+JPEG páros megjelenítéssel.
+- **Interaktív térképnézet** a földrajzi címkével ellátott fényképek és videók felfedezéséhez, az aktuális szűrők szerinti csoportosításban.
+- **Offline albumböngészés**, amely a gyorsítótárazott bélyegképeknek köszönhetően láthatóan tartja a leválasztott vagy hálózati tárolókon lévő albumokat.
 - **Széles körű formátumtámogatás** több mint 60 fotó-, RAW- és videoformátumhoz.
 
 ## Metaadatok, gyűjtemények és fájlok áthelyezése

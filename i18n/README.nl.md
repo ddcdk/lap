@@ -37,6 +37,7 @@ brew install --cask lap
 <p align="center">
   <img src="../docs/public/screenshots/lap_library.png" alt="Lap, lokale beheerder voor fotobibliotheken" width="900">
   <img src="../docs/public/screenshots/lap_map_view.png" alt="Kaartweergave in Lap" width="900">
+  <img src="../docs/public/screenshots/lap_montage.png" alt="Fotocollage in Lap" width="900">
 </p>
 
 ## Waarom Lap
@@ -49,21 +50,21 @@ brew install --cask lap
 
 ## Functies
 
-- **Flexibel bladeren door je bibliotheek** op datum, map, locatie, camera, objectief, tags, beoordelingen en gezichten, met willekeurige sortering en een filter voor kleine afbeeldingen.
-- **Interactieve kaartweergave** om foto's en video's met locatiegegevens te verkennen in clusters die je huidige filters volgen.
-- **Slimme albums** bewaren weergaven op basis van regels, met eigen groepering en sortering.
-- **Collecties en tags** om geselecteerde bestanden in bulk te ordenen zonder de originelen te verplaatsen of te dupliceren.
+- **Flexibel bladeren door je bibliotheek** op datum, map, locatie, camera, objectief, tags, beoordelingen en gezichten, met sortering en zoeken.
+- **Werken vanuit mappen** met meerdere bibliotheken, importeren/exporteren via slepen of kopiëren en plakken, synchronisatie met het bestandssysteem en veilig verplaatsen, kopiëren en verwijderen.
 - **Lokaal zoeken met AI** op tekst, visuele overeenkomst, onderwerpen, gezichtsgroepering en optioneel meertalig zoeken in meer dan 50 talen.
+- **Slimme albums** bewaren weergaven op basis van regels, met eigen groepering en sortering.
+- **Importeren op datum** met een indeling per dag, maand, jaar of in één map, met behoud van originele bestandsnamen en het overslaan van duplicaten.
+- **Collecties en tags** om geselecteerde bestanden in bulk te ordenen zonder de originelen te verplaatsen of te dupliceren.
+- **Duplicaten opruimen** met een overzicht van vrij te maken ruimte en bulkverwijdering over duplicaatsets heen.
+- **Hulpmiddelen om te schiften en te vergelijken**, waaronder een vergelijkingsviewer met vier vensters.
+- **Ingebouwde bewerking** voor bijsnijden, rechttrekken met willekeurige hoek, draaien, spiegelen, formaat wijzigen en eenvoudige beeldaanpassingen.
+- **Fotocollage** om geselecteerde foto's samen te stellen in collages als raster, uitgelijnd mozaïek of fotostapel.
 - **Apple Live Photos en Google Motion Photos** met afspelen van beweging en één gezamenlijk filter voor slimme albums.
 - **RAW + JPEG/HEIC-paren** weergegeven als één item, waarbij gekoppelde bestanden bij bestandsbewerkingen bij elkaar blijven.
-- **Instelbare RAW-miniaturen en -voorbeelden** via RAW-rendering of het ingesloten voorbeeld van de camera.
-- **Werken vanuit mappen** met meerdere bibliotheken, importeren via slepen of kopiëren en plakken, synchronisatie met het bestandssysteem en veilig verplaatsen, kopiëren en verwijderen.
-- **Importeren op datum** met een indeling per dag, maand, jaar of in één map, met behoud van originele bestandsnamen en het overslaan van duplicaten.
-- **Hulpmiddelen om te schiften en te vergelijken**, waaronder een vergelijkingsviewer met vier vensters.
-- **Duplicaten opruimen** met een overzicht van vrij te maken ruimte en bulkverwijdering over duplicaatsets heen.
-- **Aanpasbare weergave** met miniaturen tot 1024 px, instelbare rastergrootte en hoeken, en snelle weergave of losse viewervensters.
-- **Integratie met de desktop** met meerdere externe apps en het instellen van de bureaubladachtergrond op macOS, Windows en GNOME Linux.
-- **Ingebouwde bewerking** voor bijsnijden, draaien, spiegelen, formaat wijzigen en eenvoudige beeldaanpassingen.
+- **Instelbare RAW-miniaturen en -voorbeelden** via RAW-rendering of het ingesloten voorbeeld van de camera, met instelbare helderheid en weergave van RAW+JPEG-paren.
+- **Interactieve kaartweergave** om foto's en video's met locatiegegevens te verkennen in clusters die je huidige filters volgen.
+- **Offline door albums bladeren** waardoor albums op ontkoppelde of netwerkopslag zichtbaar blijven met miniaturen in de cache.
 - **Brede formaatondersteuning** voor meer dan 60 foto-, RAW- en videoformaten.
 
 ## Metadata, collecties en het verplaatsen van bestanden

@@ -37,6 +37,7 @@ brew install --cask lap
 <p align="center">
   <img src="../docs/public/screenshots/lap_library.png" alt="Gerenciador local de biblioteca de fotos Lap" width="900">
   <img src="../docs/public/screenshots/lap_map_view.png" alt="Visualização de mapa do Lap" width="900">
+  <img src="../docs/public/screenshots/lap_montage.png" alt="Colagem de fotos do Lap" width="900">
 </p>
 
 ## Por que Lap
@@ -49,21 +50,21 @@ brew install --cask lap
 
 ## Recursos
 
-- **Navegação flexível** por data, pasta, local, câmera, lente, tags, avaliações e rostos, com ordem aleatória e filtro de imagens pequenas.
-- **Mapa interativo** para explorar fotos e vídeos geolocalizados em grupos que seguem os filtros atuais.
-- **Álbuns inteligentes** para salvar visualizações baseadas em regras com agrupamento e ordenação personalizados.
-- **Coleções e tags** para organizar arquivos selecionados em lote sem mover ou duplicar os originais.
+- **Navegação flexível** por data, pasta, local, câmera, lente, tags, avaliações e rostos, com ordenação e busca.
+- **Fluxo baseado em pastas** com várias bibliotecas, importação e exportação por arrastar e soltar ou copiar e colar, sincronização e operações seguras com arquivos.
 - **Busca com IA local** por texto, similaridade visual, temas e agrupamento de rostos, com busca opcional em mais de 50 idiomas.
+- **Álbuns inteligentes** para salvar visualizações baseadas em regras com agrupamento e ordenação personalizados.
+- **Importação organizada por data** em pastas por dia, mês, ano ou uma única pasta, preservando os nomes originais e ignorando duplicatas.
+- **Coleções e tags** para organizar arquivos selecionados em lote sem mover ou duplicar os originais.
+- **Limpeza de duplicatas** com resumo do espaço recuperável e remoção em lote entre grupos.
+- **Ferramentas de seleção e comparação** com um visualizador de imagens de quatro painéis.
+- **Edição integrada** para cortar, endireitar em qualquer ângulo, girar, inverter, redimensionar e fazer ajustes básicos.
+- **Colagem de fotos** para compor colagens em grade, mosaico justificado ou pilha de fotos com as fotos selecionadas.
 - **Apple Live Photos e Google Motion Photos** com reprodução do movimento e um filtro comum nos álbuns inteligentes.
 - **Pares RAW + JPEG/HEIC** exibidos como um único item, mantendo os arquivos associados juntos durante as operações.
-- **Miniaturas e prévias RAW configuráveis** usando renderização RAW ou a prévia incorporada da câmera.
-- **Fluxo baseado em pastas** com várias bibliotecas, importação por arrastar e soltar ou copiar e colar, sincronização e operações seguras com arquivos.
-- **Importação organizada por data** em pastas por dia, mês, ano ou uma única pasta, preservando os nomes originais e ignorando duplicatas.
-- **Ferramentas de seleção e comparação** com um visualizador de imagens de quatro painéis.
-- **Limpeza de duplicatas** com resumo do espaço recuperável e remoção em lote entre grupos.
-- **Visualização personalizável** com miniaturas de até 1024 px, tamanho da grade e cantos ajustáveis, além de prévia rápida ou janelas separadas.
-- **Integração com o desktop** com vários aplicativos externos e seleção de papel de parede no macOS, Windows e GNOME Linux.
-- **Edição integrada** para cortar, girar, inverter, redimensionar e fazer ajustes básicos.
+- **Miniaturas e prévias RAW configuráveis** usando renderização RAW ou a prévia incorporada da câmera, com brilho ajustável e exibição de pares RAW+JPEG.
+- **Mapa interativo** para explorar fotos e vídeos geolocalizados em grupos que seguem os filtros atuais.
+- **Navegação offline de álbuns** que mantém os álbuns em armazenamento desconectado ou de rede visíveis com miniaturas em cache.
 - **Amplo suporte a formatos** para mais de 60 formatos de fotos, RAW e vídeo.
 
 ## Metadados, coleções e movimentação de arquivos
