@@ -101,7 +101,8 @@ test('a superseded RAW response cannot replace the latest source or leak a blob 
   const latest = await newer;
   requests[0].resolve(response());
   await rejected;
-  assert.deepEqual(latest.raw, { source: 'brightened', unavailable: true, pair: 'JPEG' });
+  // preferPair is false: a response header must not expose a paired JPEG.
+  assert.deepEqual(latest.raw, { source: 'brightened', unavailable: true, pair: null });
   assert.equal(urls.size, 1);
   URL.revokeObjectURL(latest.src);
 });

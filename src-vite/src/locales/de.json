@@ -623,6 +623,10 @@
       "limit": "Es können höchstens {count} Dateien gleichzeitig kopiert werden.",
       "failed": "Foto konnte nicht kopiert werden. Nicht unterstütztes Format oder beschädigte Datei."
     },
+    "drag_out": {
+      "too_many": "Du kannst höchstens {count} Dateien auf einmal herausziehen. Verkleinere die Auswahl.",
+      "failed": "Dateien konnten nicht gezogen werden. Prüfe, ob die Originaldateien verfügbar sind."
+    },
     "open_external": {
       "mixed_selection": "Wählen Sie nur Fotos oder nur Videos aus, um sie in einem externen Editor zu öffnen.",
       "no_app": "Es ist kein externer Editor festgelegt. Wählen Sie einen in den Optionen aus.",

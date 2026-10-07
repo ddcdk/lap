@@ -274,6 +274,13 @@ function onDocumentPointerMove(event: PointerEvent) {
   emit('item-drag', event);
 }
 
+function cancelPointerDrag() {
+  pendingPointerDrag = null;
+  document.documentElement.style.userSelect = '';
+  document.documentElement.style.webkitUserSelect = '';
+  clearPointerDragListeners();
+}
+
 function onDocumentPointerUp(event: PointerEvent) {
   const drag = pendingPointerDrag;
   if (!drag || event.pointerId !== drag.pointerId) return;
@@ -981,6 +988,7 @@ function getFolderGroupLabel(item: any) {
 }
 
 defineExpose({
+  cancelPointerDrag,
   getColumnCount,
   scrollToItem,
   scrollToPosition,

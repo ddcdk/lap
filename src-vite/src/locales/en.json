@@ -623,6 +623,10 @@
       "limit": "You can copy up to {count} files at a time.",
       "failed": "Failed to copy photo. Unsupported format or corrupted file."
     },
+    "drag_out": {
+      "too_many": "You can drag out at most {count} files at once. Reduce your selection.",
+      "failed": "Could not start file drag. Check that the original files are available."
+    },
     "open_external": {
       "mixed_selection": "Select only photos or only videos to open them in an external editor.",
       "no_app": "No external editor is set. Choose one in Settings.",

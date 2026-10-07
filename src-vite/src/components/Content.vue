@@ -772,6 +772,7 @@ import ProgressBar from '@/components/ProgressBar.vue';
 import GridView  from '@/components/GridView.vue';
 import PhotoMapView from '@/components/PhotoMapView.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
+import { MAX_NATIVE_DRAG_FILES, createDragPreview, isWindowDragEdge, isNativeFileDragActive, isReturningNativeFileDrag, startNativeFileDrag } from '@/common/nativeDrag';
 import { isOriginalUnavailable, setFileAccessibility, setFolderAccessibility, requiresOriginalAction } from '@/common/availability';
 import { useFileMenuItems } from '@/common/fileMenu';
 import Welcome from '@/components/Welcome.vue';
@@ -2609,6 +2610,8 @@ let domDrop: ((e: DragEvent) => void) | null = null;
 let dragGhost: HTMLElement | null = null;
 let dragGhostAction: HTMLElement | null = null;
 let pointerDropTarget: HTMLElement | null = null;
+let nativeDragFiles: Promise<any[] | null> | null = null;
+let nativeDragPreview: number[] = [];
 let pointerDragUsesSelection = false;
 let pointerDragFiles: Array<{
   id: number;
@@ -2658,12 +2661,13 @@ function getExternalFileDropPaths(uris: string[]) {
 }
 
 function hasExternalDomDrop(event: DragEvent) {
+  if (isNativeFileDragActive()) return false;
   return hasExternalDragIntent(event)
     || getExternalDropUris(event.dataTransfer).some(uri => fileUrlToPath(uri) || /^https?:\/\//.test(uri));
 }
 
 function hasExternalDragIntent(event: DragEvent) {
-  if (isContentInternalDrag.value) return false;
+  if (isContentInternalDrag.value || isNativeFileDragActive()) return false;
   const dt = event.dataTransfer;
   if (!dt) return false;
   const types = Array.from(dt.types || []);
@@ -2753,6 +2757,7 @@ function removeDragGhost() {
   dragGhostAction = null;
   setPointerDropTarget(null);
   document.removeEventListener('pointermove', updateContentDragPosition);
+  document.documentElement.removeEventListener('mouseleave', onContentWindowLeave);
   document.removeEventListener('keydown', updateDragGhostModifier);
   document.removeEventListener('keyup', updateDragGhostModifier);
 }
@@ -2967,7 +2972,47 @@ function createDragGhost(
   dragGhostAction = action;
 }
 
+function onContentWindowLeave(event: MouseEvent) {
+  if (isContentInternalDrag.value && (event.buttons & 1)) void handOffNativeDrag();
+}
+
+async function handOffNativeDrag() {
+  const exceedsLimit = pointerDragUsesSelection && selectedCount.value > MAX_NATIVE_DRAG_FILES;
+  const filesPromise = nativeDragFiles;
+  const preview = nativeDragPreview;
+  let released = false;
+  const onRelease = () => { released = true; };
+  window.addEventListener('pointerup', onRelease, true);
+  window.addEventListener('pointercancel', onRelease, true);
+  gridViewRef.value?.cancelPointerDrag();
+  // No PointerEvent means cleanup only: never execute an internal drop.
+  await clearContentInternalDrag();
+  try {
+    if (exceedsLimit) {
+      toast.warning(t('tooltip.drag_out.too_many', { count: MAX_NATIVE_DRAG_FILES }));
+      return;
+    }
+    const files = await filesPromise;
+    if (released || !files?.length) return;
+    if (files.some(isOriginalUnavailable)) {
+      toast.warning(t('offline.requires_original'));
+      return;
+    }
+    await startNativeFileDrag(files.map(file => file.file_path), preview);
+  } catch (error) {
+    console.error('Native file drag failed:', error);
+    toast.error(t('tooltip.drag_out.failed'));
+  } finally {
+    window.removeEventListener('pointerup', onRelease, true);
+    window.removeEventListener('pointercancel', onRelease, true);
+  }
+}
+
 function updateContentDragPosition(event: PointerEvent) {
+  if (isContentInternalDrag.value && (event.buttons & 1) && isWindowDragEdge(event)) {
+    void handOffNativeDrag();
+    return;
+  }
   if (!dragGhost || (event.clientX === 0 && event.clientY === 0)) return;
   dragGhost.style.transform = `translate3d(${Math.round(event.clientX - dragGhostHotspotX)}px, ${Math.round(event.clientY - dragGhostHotspotY)}px, 0)`;
   const elementAtPointer = document.elementFromPoint(event.clientX, event.clientY);
@@ -3006,6 +3051,11 @@ function markContentInternalDrag({
   const files = pointerDragUsesSelection && selected.length > 0 ? selected : [draggedFile];
   draggedFileIds.value = new Set(files.map((file: any) => Number(file.id)).filter(id => id > 0));
 
+  const canDragOut = !pointerDragUsesSelection || selectedCount.value <= MAX_NATIVE_DRAG_FILES;
+  nativeDragPreview = canDragOut ? createDragPreview(fileItem.querySelector('img')) : [];
+  nativeDragFiles = canDragOut
+    ? (pointerDragUsesSelection ? getActionableSelectedItemsForAction() : Promise.resolve([draggedFile]))
+    : null;
   pointerDragFiles = files.map((f: any) => ({
     id: f.id,
     file_path: f.file_path,
@@ -3020,10 +3070,11 @@ function markContentInternalDrag({
     { xRatio: hotspotXRatio, yRatio: hotspotYRatio },
   );
   void tauriEmit('content-items-drag-state', { dragging: true });
-  updateContentDragPosition(event);
   document.addEventListener('pointermove', updateContentDragPosition);
+  document.documentElement.addEventListener('mouseleave', onContentWindowLeave);
   document.addEventListener('keydown', updateDragGhostModifier);
   document.addEventListener('keyup', updateDragGhostModifier);
+  updateContentDragPosition(event);
 }
 
 async function clearContentInternalDrag(event?: PointerEvent) {
@@ -3036,6 +3087,8 @@ async function clearContentInternalDrag(event?: PointerEvent) {
   draggedFileIds.value = new Set();
   pointerDragUsesSelection = false;
   pointerDragFiles = null;
+  nativeDragFiles = null;
+  nativeDragPreview = [];
   removeDragGhost();
   void tauriEmit('content-items-drag-state', { dragging: false });
 
@@ -5333,6 +5386,11 @@ onMounted( async() => {
   // Drag-drop file import. Tauri native drag/drop is disabled so internal
   // HTML5 drag interactions (e.g. sortable lists) keep their drop events.
   domDragEnter = (e: DragEvent) => {
+    if (isReturningNativeFileDrag(e)) {
+      e.preventDefault();
+      clearDropOverlay();
+      return;
+    }
     if (isInternalReorderActive()) {
       clearDropOverlay();
       return;
@@ -5345,6 +5403,11 @@ onMounted( async() => {
     }
   };
   domDragLeave = (e: DragEvent) => {
+    if (isReturningNativeFileDrag(e)) {
+      e.preventDefault();
+      clearDropOverlay();
+      return;
+    }
     if (isInternalReorderActive()) {
       clearDropOverlay();
       return;
@@ -5355,6 +5418,11 @@ onMounted( async() => {
     if (dragOverCount.value === 0) isDragOver.value = false;
   };
   domDragOver = (e: DragEvent) => {
+    if (isReturningNativeFileDrag(e)) {
+      e.preventDefault();
+      clearDropOverlay();
+      return;
+    }
     if (isInternalReorderActive()) {
       clearDropOverlay();
       return;
@@ -5363,6 +5431,11 @@ onMounted( async() => {
     e.preventDefault();
   };
   domDrop = async (e: DragEvent) => {
+    if (isReturningNativeFileDrag(e)) {
+      e.preventDefault();
+      clearDropOverlay();
+      return;
+    }
     if (isInternalReorderActive() || isContentInternalDrag.value) {
       clearDropOverlay();
       clearContentInternalDrag();

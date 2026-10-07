@@ -623,6 +623,10 @@
       "limit": "Możesz skopiować jednorazowo maksymalnie {count} plików.",
       "failed": "Nie udało się skopiować zdjęcia. Nieobsługiwany format lub uszkodzony plik."
     },
+    "drag_out": {
+      "too_many": "Możesz przeciągnąć na zewnątrz maksymalnie {count} plików naraz. Zmniejsz zaznaczenie.",
+      "failed": "Nie można rozpocząć przeciągania. Sprawdź dostępność oryginalnych plików."
+    },
     "open_external": {
       "mixed_selection": "Wybierz tylko zdjęcia lub tylko filmy, aby otworzyć je w zewnętrznym edytorze.",
       "no_app": "Nie ustawiono zewnętrznego edytora. Wybierz go w Ustawieniach.",

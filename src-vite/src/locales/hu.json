@@ -623,6 +623,10 @@
       "limit": "Egyszerre legfeljebb {count} fájlt másolhat.",
       "failed": "A fotó nem másolható. Nem támogatott formátum vagy sérült fájl."
     },
+    "drag_out": {
+      "too_many": "Egyszerre legfeljebb {count} fájl húzható ki. Csökkentsd a kijelölést.",
+      "failed": "Nem sikerült elindítani a húzást. Ellenőrizd, hogy az eredeti fájlok elérhetők-e."
+    },
     "open_external": {
       "mixed_selection": "Külső szerkesztőhöz csak fotókat vagy csak videókat jelöljön ki.",
       "no_app": "Nincs külső szerkesztő beállítva. Válasszon egyet a Beállításokban.",

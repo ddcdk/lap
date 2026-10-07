@@ -145,13 +145,14 @@ function dragFixture(collection = false) {
   ];
   setAlbumAccessibility(10, true);
   setAlbumAccessibility(20, false);
-  const calls = { started: 0, preflight: [], added: [], transfers: 0 };
+  const calls = { started: 0, previews: 0, hydrated: 0, preflight: [], added: [], transfers: 0 };
   const deps = {
     fileList: ref([files[0]]), selectedCount: ref(2),
-    document: { getElementById: () => ({}), addEventListener: () => {} },
+    document: { getElementById: () => ({ querySelector: () => null }), addEventListener: () => {}, documentElement: { addEventListener: () => {}, removeEventListener: () => {} } },
+    MAX_NATIVE_DRAG_FILES: 1000, createDragPreview: () => { calls.previews++; return []; }, onContentWindowLeave: () => {},
     isRealFileItem: () => true, isContentInternalDrag: ref(false),
     getActionableSelectedItems: () => deps.fileList.value,
-    getActionableSelectedItemsForAction: async () => files,
+    getActionableSelectedItemsForAction: async () => { calls.hydrated++; return files; },
     isOriginalUnavailable,
     draggedFileIds: ref(new Set()), createDragGhost: () => { calls.started++; },
     tauriEmit: async () => {}, updateContentDragPosition: () => {},
@@ -163,7 +164,7 @@ function dragFixture(collection = false) {
     t: key => key, toast: { success: () => {}, info: () => {} },
     libConfig: { activePane: 'album' },
   };
-  const result = new Function('deps', 'const {' + Object.keys(deps).join(',') + '} = deps; let pointerDragUsesSelection = false; let pointerDragFiles = null; const pointerDropTarget = ' + JSON.stringify({ dataset: collection ? { collectionDropId: '7' } : { fileDropPath: '/destination', fileDropAlbumId: '10' } }) + '; ' + dragBody + '; return { markContentInternalDrag, clearContentInternalDrag };')(deps);
+  const result = new Function('deps', 'const {' + Object.keys(deps).join(',') + '} = deps; let pointerDragUsesSelection = false; let pointerDragFiles = null; let nativeDragFiles = null; let nativeDragPreview = []; const pointerDropTarget = ' + JSON.stringify({ dataset: collection ? { collectionDropId: '7' } : { fileDropPath: '/destination', fileDropAlbumId: '10' } }) + '; ' + dragBody + '; return { markContentInternalDrag, clearContentInternalDrag };')(deps);
   return { ...result, deps, calls, files };
 }
 
@@ -353,4 +354,14 @@ test('album selection refresh is not duplicated by the accessibility event', () 
   assert.equal(refreshes, 1);
   onAccess({ payload: { libraryId: 'other-library', selectionChanged: false } });
   assert.equal(refreshes, 1);
+});
+
+test('oversized drag selection skips native preview and hydration while keeping internal dragging', () => {
+  const fixture = dragFixture();
+  fixture.deps.selectedCount.value = 1001;
+  fixture.markContentInternalDrag({ event: {}, index: 0, hotspotXRatio: 0, hotspotYRatio: 0 });
+  assert.equal(fixture.calls.previews, 0);
+  assert.equal(fixture.calls.hydrated, 0);
+  assert.equal(fixture.calls.started, 1);
+  assert.equal(fixture.deps.isContentInternalDrag.value, true);
 });

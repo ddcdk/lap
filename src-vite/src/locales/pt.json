@@ -623,6 +623,10 @@
       "limit": "Você pode copiar até {count} arquivos por vez.",
       "failed": "Falha ao copiar a foto. Formato não suportado ou arquivo corrompido."
     },
+    "drag_out": {
+      "too_many": "Pode arrastar para fora até {count} ficheiros de cada vez. Reduza a seleção.",
+      "failed": "Não foi possível iniciar o arrasto. Verifique se os arquivos originais estão disponíveis."
+    },
     "open_external": {
       "mixed_selection": "Selecione apenas fotos ou apenas vídeos para abri-los em um editor externo.",
       "no_app": "Nenhum editor externo definido. Escolha um em Ajustes.",

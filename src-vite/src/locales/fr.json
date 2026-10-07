@@ -623,6 +623,10 @@
       "limit": "Vous pouvez copier jusqu'à {count} fichiers à la fois.",
       "failed": "Impossible de copier la photo. Format non pris en charge ou fichier corrompu."
     },
+    "drag_out": {
+      "too_many": "Vous pouvez faire glisser au maximum {count} fichiers à la fois. Réduisez la sélection.",
+      "failed": "Impossible de démarrer le glisser-déposer. Vérifiez que les fichiers originaux sont accessibles."
+    },
     "open_external": {
       "mixed_selection": "Sélectionnez uniquement des photos ou uniquement des vidéos pour les ouvrir dans un éditeur externe.",
       "no_app": "Aucun éditeur externe n'est défini. Choisissez-en un dans les Paramètres.",

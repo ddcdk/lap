@@ -21,6 +21,7 @@ mod t_cmds;
 mod t_common;
 mod t_config;
 mod t_dedup;
+mod t_drag;
 mod t_embedded_jpeg;
 mod t_face;
 mod t_heif;
@@ -230,6 +231,8 @@ async fn main() {
             t_menu::handle_menu_event(app, event);
         })
         .invoke_handler(tauri::generate_handler![
+            t_drag::start_file_drag,
+            t_drag::cancel_file_drag,
             // library
             t_cmds::get_app_config,
             t_cmds::get_supported_format_extensions,

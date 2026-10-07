@@ -623,6 +623,10 @@
       "limit": "Je kunt maximaal {count} bestanden tegelijk kopiëren.",
       "failed": "Kan foto niet kopiëren. Niet-ondersteund formaat of beschadigd bestand."
     },
+    "drag_out": {
+      "too_many": "Je kunt maximaal {count} bestanden tegelijk naar buiten slepen. Verklein de selectie.",
+      "failed": "Kan bestanden niet slepen. Controleer of de oorspronkelijke bestanden beschikbaar zijn."
+    },
     "open_external": {
       "mixed_selection": "Selecteer alleen foto's of alleen video's om ze in een externe editor te openen.",
       "no_app": "Er is geen externe editor ingesteld. Kies er een in Instellingen.",

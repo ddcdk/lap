@@ -200,6 +200,7 @@ import { RawFace, Face } from '@/common/types';
 import { rawDisplayKey, getRawDisplayOptions, appendRawDisplayParams, nextRawPreviewMode, type RawPreviewSource, type RawDisplayOptions } from '@/common/rawDisplay';
 import { useI18n } from 'vue-i18n';
 import { useToast } from '@/common/toast';
+import { createDragPreview, isWindowDragEdge, startNativeFileDrag } from '@/common/nativeDrag';
 
 import { checkFileAccessibility } from '@/common/api';
 import { setFileAccessibility } from '@/common/availability';
@@ -883,6 +884,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener('mousemove', trackImageDragOut, true);
+  document.documentElement.removeEventListener('mouseleave', trackImageDragOut);
+  document.removeEventListener('mouseup', handleImageMouseUp, true);
   rawAbortController?.abort();
   for (const url of rawObjectUrls) URL.revokeObjectURL(url);
   rawObjectUrls.clear();
@@ -1681,6 +1685,20 @@ const zoomReset = (force: boolean = false) => {
   zoomImage(mousePos.x - containerPosVal.x, mousePos.y - containerPosVal.y, getActualSizeScale(), force);
 };
 
+let dragOutStart: { x: number; y: number; path: string; preview: number[] } | null = null;
+function trackImageDragOut(event: MouseEvent) {
+  const start = dragOutStart;
+  if (!start || !(event.buttons & 1)) return;
+  if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < 6 || !isWindowDragEdge(event)) return;
+  mouseDragNavDeltaX.value = 0;
+  mouseDragNavDeltaY.value = 0;
+  finishImageMouseDrag(false);
+  void startNativeFileDrag([start.path], start.preview).catch(error => {
+    console.error('Native image drag failed:', error);
+    toast.error(t('tooltip.drag_out.failed'));
+  });
+}
+
 // start dragging
 const handleImageMouseDown = (event: MouseEvent) => {
   if (isTouchActive.value) return; // touch path owns this gesture
@@ -1688,6 +1706,15 @@ const handleImageMouseDown = (event: MouseEvent) => {
   updatePosition();
 
   if (event.button === 0) {     // left click: drag image
+    if (!props.originalUnavailable && !props.isSlideShow && props.filePath) {
+      dragOutStart = {
+        x: event.clientX, y: event.clientY, path: props.filePath,
+        preview: createDragPreview(event.target as HTMLImageElement),
+      };
+      document.addEventListener('mousemove', trackImageDragOut, true);
+      document.documentElement.addEventListener('mouseleave', trackImageDragOut);
+      document.addEventListener('mouseup', handleImageMouseUp, true);
+    }
     isDraggingImage.value = true;
     lastMousePosition.value = { x: event.clientX, y: event.clientY };
     mouseDragNavDeltaX.value = 0;
@@ -1724,12 +1751,28 @@ const handleImageMouseMove = (event: MouseEvent) => {
 };
 
 // stop dragging
-const handleImageMouseUp = () => {
+const handleImageMouseUp = () => finishImageMouseDrag(true);
+
+function finishImageMouseDrag(navigate: boolean) {
+  if (animationFrameId) cancelAnimationFrame(animationFrameId);
+  animationFrameId = null;
+  // A quick swipe may release before its scheduled frame runs.
+  if (navigate && isDraggingImage.value && latestMouseEvent.value) updateDragPosition();
+  latestMouseEvent.value = null;
+  if (navigate && mouseDragNavTriggered.value && Math.abs(mouseDragNavDeltaX.value) >= MOUSE_DRAG_NAV_THRESHOLD) {
+    const direction = mouseDragNavDeltaX.value > 0 ? 'prev' : 'next';
+    navDirection.value = direction;
+    emit('message-from-image-viewer', { message: direction });
+  }
+  dragOutStart = null;
+  document.removeEventListener('mousemove', trackImageDragOut, true);
+  document.documentElement.removeEventListener('mouseleave', trackImageDragOut);
+  document.removeEventListener('mouseup', handleImageMouseUp, true);
   isDraggingImage.value = false;
   mouseDragNavDeltaX.value = 0;
   mouseDragNavDeltaY.value = 0;
   mouseDragNavTriggered.value = false;
-};
+}
 
 // mouse leave
 // reset mouse position to the center when leaving the container
@@ -1742,7 +1785,7 @@ const handleImageMouseLeave = () => {
 
 const updateDragPosition = () => {
   const event = latestMouseEvent.value;
-  if (!event) return;
+  if (!event || !isDraggingImage.value) return;
 
   const imgIndex = activeImage.value;
   const scaleVal = scale.value[imgIndex];
@@ -1766,11 +1809,9 @@ const updateDragPosition = () => {
       const absX = Math.abs(mouseDragNavDeltaX.value);
       const absY = Math.abs(mouseDragNavDeltaY.value);
       if (absX >= MOUSE_DRAG_NAV_THRESHOLD && absX > absY) {
-        const direction = mouseDragNavDeltaX.value > 0 ? 'prev' : 'next';
-        navDirection.value = direction;
-        emit('message-from-image-viewer', { message: direction });
+        // Commit mouse swipe on release, so dragging onward to the window
+        // edge can hand the original file to the OS instead of changing images.
         mouseDragNavTriggered.value = true;
-        isDraggingImage.value = false;
       }
     }
 

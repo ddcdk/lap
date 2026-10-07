@@ -26,6 +26,7 @@ strip = true
 opt-level = 3
 
 [dependencies]
+drag = { path = "vendor/drag" }
 tauri = { version = "2", features = [
     "macos-private-api",
     "protocol-asset",

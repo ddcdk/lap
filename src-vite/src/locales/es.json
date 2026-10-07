@@ -623,6 +623,10 @@
       "limit": "Puedes copiar hasta {count} archivos a la vez.",
       "failed": "No se pudo copiar la foto. Formato no compatible o archivo dañado."
     },
+    "drag_out": {
+      "too_many": "Puedes arrastrar fuera hasta {count} archivos a la vez. Reduce la selección.",
+      "failed": "No se pudo iniciar el arrastre. Comprueba que los archivos originales estén disponibles."
+    },
     "open_external": {
       "mixed_selection": "Selecciona solo fotos o solo videos para abrirlos en un editor externo.",
       "no_app": "No hay ningún editor externo configurado. Elige uno en Ajustes.",
