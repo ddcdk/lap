@@ -291,6 +291,8 @@
             >
               <MediaViewer
                 ref="filmStripMediaRef"
+                :suppress-auto-navigator="infoNavigatorVisible"
+                @viewport-change="previewViewports.filmstrip = $event"
                 @close="closeFilmstripFullScreen"
                 :mode="1"
                 :isFullScreen="false"
@@ -346,6 +348,8 @@
           >
             <MediaViewer
               ref="quickViewMediaRef"
+              :suppress-auto-navigator="infoNavigatorVisible"
+              @viewport-change="previewViewports.quick = $event"
               :mode="0"
               :isFullScreen="false"
               :file="fileList[selectedItemIndex]"
@@ -485,7 +489,12 @@
           <FileInfo
             v-else-if="rightPanelContent === 'info'"
             ref="fileInfoRef"
-            :fileInfo="fileList[selectedItemIndex]" 
+            :fileInfo="fileList[selectedItemIndex]"
+            :navigator-viewport="infoNavigatorViewport"
+            @navigator-visible="infoNavigatorVisible = $event"
+            @navigator-navigate="navigateInfoPreview"
+            @navigator-zoom="getActivePreviewMediaRef()?.zoomNavigator?.($event)"
+            @navigator-toggle-fit="getActivePreviewMediaRef()?.toggleZoomFit?.()"
             @close="checkUnsavedChanges(() => config.rightPanel.show = false)" 
             @success="onFileSaved(true, $event)"
             @failed="onFileSaved(false)"
@@ -1921,6 +1930,18 @@ async function runWithKeyedConcurrency<T, R>(
 // quick view
 const showQuickView = ref(false);
 const quickViewMediaRef = ref<any>(null);
+const previewViewports = ref<{ quick: any; filmstrip: any }>({ quick: null, filmstrip: null });
+const infoNavigatorVisible = ref(false);
+const infoNavigatorViewport = computed(() => {
+  const viewport = showQuickView.value ? previewViewports.value.quick
+    : showFilmstripLayout.value ? previewViewports.value.filmstrip : null;
+  return viewport && viewport.fileId === fileList.value[selectedItemIndex.value]?.id
+    && viewport.sourceWidth > 0 && viewport.sourceHeight > 0 ? viewport : null;
+});
+function navigateInfoPreview(point: { normX: number; normY: number }) {
+  getActivePreviewMediaRef()?.navigateImage?.(point);
+}
+
 const quickViewZoomFit = ref(true);
 const quickViewHoverLeft = ref(false);
 const quickViewHoverRight = ref(false);

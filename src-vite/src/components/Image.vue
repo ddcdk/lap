@@ -158,38 +158,21 @@
 
     <!-- Navigator view -->
     <transition name="fade">
-      <!-- nav container -->
-      <div v-if="showNavigator"
-        data-image-navigator
-        class="absolute right-4 bottom-4 outline outline-gray-50 overflow-hidden shadow-lg shadow-gray-500 z-20" 
-        :style="navContainerStyle"
+      <div v-if="showNavigator" class="absolute right-4 bottom-4 z-20"
+        :style="{ width: `${navContainerSize.width}px`, height: `${navContainerSize.height}px` }">
+      <ImageNavigator
+        class="h-full w-full outline outline-gray-50 shadow-lg shadow-gray-500"
+        :style="{ width: `${navContainerSize.width}px`, height: `${navContainerSize.height}px` }"
+        :source="displayThumbnailSrc || getThumbUrl(props.fileId, false, config.settings.thumbnailSize, props.fileVersion)"
+        :viewport="navigatorViewport"
+        :sharpness="config.settings.navigatorSharpnessGrid"
         @mouseenter="pauseNavigatorAutoHide"
         @mouseleave="resetNavigatorAutoHide"
-        @wheel="handleNavBoxWheel"
-        @click="handleNavBoxClick"
-        @dblclick.stop="toggleZoomFit"
-      >
-        <!-- nav image -->
-        <img :src="displayThumbnailSrc || imageSrc[activeImage]" :style="navImageStyle" draggable="false" />
-        <SharpnessGrid
-          :source="displayThumbnailSrc || getThumbUrl(props.fileId, false, config.settings.thumbnailSize, props.fileVersion)"
-          :enabled="config.settings.navigatorSharpnessGrid"
-          :width="navContainerSize.width"
-          :height="navContainerSize.height"
-          :rotate="imageRotate[activeImage]"
-        />
-        <!-- nav box -->
-        <div class="absolute top-0 left-0 border-2 border-primary cursor-move"
-          :style="navBoxStyle"
-          @mousedown="handleNavBoxMouseDown"
-          @mousemove="handleNavBoxMouseMove"
-          @mouseup="handleNavBoxMouseUp"
-          @mouseleave="handleNavBoxMouseLeave"
-          @pointerdown="handleNavBoxPointerDown"
-          @pointermove="handleNavBoxPointerMove"
-          @pointerup="handleNavBoxPointerEnd"
-          @pointercancel="handleNavBoxPointerEnd"
-        ></div>
+        @navigate="navigateImage"
+        @zoom="zoomNavigator"
+        @toggle-fit="toggleZoomFit"
+        @dragging="isDraggingNavBox = $event"
+      />
       </div>
     </transition>
 
@@ -221,7 +204,7 @@ import { useToast } from '@/common/toast';
 import { checkFileAccessibility } from '@/common/api';
 import { setFileAccessibility } from '@/common/availability';
 import { IconError, IconBrightness } from '@/common/icons';
-import SharpnessGrid from '@/components/SharpnessGrid.vue';
+import ImageNavigator from '@/components/ImageNavigator.vue';
 
 const { t } = useI18n();
 const toast = useToast();
@@ -284,6 +267,7 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  suppressAutoNavigator: { type: Boolean, default: false },
   showInlineLoading: {
     type: Boolean,
     default: false,
@@ -320,7 +304,7 @@ const isGrabbing = ref(false);              // Grabbing state
 const navigatorAutoVisible = ref(true);
 const showNavigator = computed(() =>
   config.settings.navigatorViewMode === 1
-  || (config.settings.navigatorViewMode === 0 && isGrabbing.value && navigatorAutoVisible.value)
+  || (config.settings.navigatorViewMode === 0 && !props.suppressAutoNavigator && isGrabbing.value && navigatorAutoVisible.value)
 );
 let navigatorAutoHideTimer: ReturnType<typeof setTimeout> | null = null;
 const isResizingContainer = ref(false);
@@ -851,314 +835,24 @@ function setImageSlot(
   }
 }
 
-// navigator container style
-const navContainerStyle = computed(() => {
-  return {
-    width: `${navContainerSize.value.width}px`,
-    height: `${navContainerSize.value.height}px`,
-  };
-});
-
-// navigator image style
-const navImageStyle = computed(() => {
-  const rotation = imageRotate.value[activeImage.value];
-  const imgSize = imageSize.value[activeImage.value];
-
-  let scale;
-  if (rotation % 180 !== 0) {
-    scale = Math.min(navContainerSize.value.width / imgSize.height, navContainerSize.value.height / imgSize.width);
-  } else {
-    scale = Math.min(navContainerSize.value.width / imgSize.width, navContainerSize.value.height / imgSize.height);
-  }
-
-  return {
-    minWidth: `${imgSize.width}px`,
-    minHeight: `${imgSize.height}px`,
-    position: 'absolute' as const,
-    left: `${(navContainerSize.value.width - imgSize.width) / 2}px`,
-    top: `${(navContainerSize.value.height - imgSize.height) / 2}px`,
-    transform: `scale(${scale}) rotate(${rotation}deg)`,
-    transformOrigin: 'center center',
-  };
-});
-
-// navigator box style
-const navBoxStyle = computed(() => {
-  const mainScale = scale.value[activeImage.value];
-  const imgSize = imageSize.value[activeImage.value];
-  const imgRotatedSize = imageSizeRotated.value[activeImage.value];
-  const rotation = imageRotate.value[activeImage.value];
-  const isRotated = rotation % 180 !== 0;
-
-  if (!isGrabbing.value || mainScale <= 0 || imgSize.width === 0 || imgRotatedSize.width === 0) {
-    return { display: 'none' };
-  }
-
-  let navScale;
-  if (isRotated) {
-    navScale = Math.min(navContainerSize.value.width / imgSize.height, navContainerSize.value.height / imgSize.width);
-  } else {
-    navScale = Math.min(navContainerSize.value.width / imgSize.width, navContainerSize.value.height / imgSize.height);
-  }
-
-  const finalW = isRotated ? (imgSize.height * navScale) : (imgSize.width * navScale);
-  const worldRatio = finalW / imgRotatedSize.width;
-
-  const boxWidth = (containerSize.value.width / mainScale) * worldRatio;
-  const boxHeight = (containerSize.value.height / mainScale) * worldRatio;
-
-  const cW = containerSize.value.width;
-  const cH = containerSize.value.height;
-  const iW = imageSize.value[activeImage.value].width;
-  const iH = imageSize.value[activeImage.value].height;
-
-  const posX = position.value[activeImage.value].x;
-  const posY = position.value[activeImage.value].y;
-  const rot = imageRotate.value[activeImage.value];
-
-  // Find viewport center on un-scaled, un-rotated image content
-  const V_x = (cW / 2) - (posX + iW / 2);
-  const V_y = (cH / 2) - (posY + iH / 2);
-
-  const V_scaled_x = V_x / mainScale;
-  const V_scaled_y = V_y / mainScale;
-
-  const angle = rot * Math.PI / 180;
-  const cos_a = Math.cos(angle);
-  const sin_a = Math.sin(angle);
-
-  // CCW rotation to get coordinates in image's local system
-  const p_content_center_x = V_scaled_x * cos_a - V_scaled_y * sin_a;
-  const p_content_center_y = V_scaled_x * sin_a + V_scaled_y * cos_a;
-
-  // Find this point's position in the navContainer
-  const p_nav_scaled_x = p_content_center_x * navScale;
-  const p_nav_scaled_y = p_content_center_y * navScale;
-
-  // CW rotation to place point in the rotated navImage's system
-  const p_final_x = p_nav_scaled_x * cos_a + p_nav_scaled_y * sin_a + navContainerSize.value.width / 2;
-  const p_final_y = -p_nav_scaled_x * sin_a + p_nav_scaled_y * cos_a + navContainerSize.value.height / 2;
-
-  // Calculate navBox top-left from its center
-  const boxX = p_final_x - boxWidth / 2;
-  const boxY = p_final_y - boxHeight / 2;
-
-  return {
-    width: `${boxWidth}px`,
-    height: `${boxHeight}px`,
-    transform: `translate(${boxX}px, ${boxY}px)`,
-    boxShadow: `0 0 0 9999px color-mix(in srgb, var(--color-base-200) 30%, transparent)`,
-    touchAction: 'none',
-  };
-});
-
 const isDraggingNavBox = ref(false);
-const initialNavBoxClickPos = ref({ x: 0, y: 0 });
-const isDraggingNavBoxMoved = ref(false);
-
-const handleNavBoxMouseDown = (event: MouseEvent) => {
-  if (isTouchActive.value) return;
-  event.preventDefault();
-  event.stopPropagation();
-  isDraggingNavBox.value = true;
-  lastMousePosition.value = { x: event.clientX, y: event.clientY };
-  initialNavBoxClickPos.value = { x: event.clientX, y: event.clientY }; // Record initial position
-  isDraggingNavBoxMoved.value = false; // Reset moved flag
-};
-
-const handleNavBoxMouseMove = (event: MouseEvent) => {
-  if (isTouchActive.value) return;
-  if (!isDraggingNavBox.value) return;
-
-  // Check if mouse has moved significantly to consider it a drag
-  const dx = event.clientX - initialNavBoxClickPos.value.x;
-  const dy = event.clientY - initialNavBoxClickPos.value.y;
-  if (Math.sqrt(dx * dx + dy * dy) > 5) { // Threshold of 5 pixels
-    isDraggingNavBoxMoved.value = true;
-  }
-
-  // update mouse position
-  mousePosition.value = { x: event.clientX, y: event.clientY };
-  latestMouseEvent.value = event;
-
-  // No need to run more than once per frame
-  if (animationFrameId) return;
-
-  animationFrameId = requestAnimationFrame(() => {
-    updateNavBoxDragPosition();
-    animationFrameId = null;
-  });
-};
-
-const handleNavBoxMouseUp = () => {
-  isDraggingNavBox.value = false;
-  handleImageMouseLeave();
-};
-
-const handleNavBoxMouseLeave = () => {
-  // reset mouse position to the center of the container
-  const container = containerSize.value;
-  mousePosition.value = { x: container.width / 2, y: container.height / 2 };
-};
-
-// Touch equivalents of the nav-box mouse drag — single finger only.
-let navBoxPanPointerId: number | null = null;
-const handleNavBoxPointerDown = (event: PointerEvent) => {
-  if (event.pointerType !== 'touch') return;
-  event.preventDefault();
-  event.stopPropagation();
-  navBoxPanPointerId = event.pointerId;
-  isDraggingNavBox.value = true;
-  isTouchActive.value = true;
-  lastMousePosition.value = { x: event.clientX, y: event.clientY };
-  initialNavBoxClickPos.value = { x: event.clientX, y: event.clientY };
-  isDraggingNavBoxMoved.value = false;
-};
-const handleNavBoxPointerMove = (event: PointerEvent) => {
-  if (event.pointerType !== 'touch' || event.pointerId !== navBoxPanPointerId) return;
-  if (!isDraggingNavBox.value) return;
-  event.preventDefault();
-  const dx = event.clientX - initialNavBoxClickPos.value.x;
-  const dy = event.clientY - initialNavBoxClickPos.value.y;
-  if (Math.sqrt(dx * dx + dy * dy) > 5) {
-    isDraggingNavBoxMoved.value = true;
-  }
-  mousePosition.value = { x: event.clientX, y: event.clientY };
-  latestMouseEvent.value = event;
-  if (animationFrameId) return;
-  animationFrameId = requestAnimationFrame(() => {
-    updateNavBoxDragPosition();
-    animationFrameId = null;
-  });
-};
-const handleNavBoxPointerEnd = (event: PointerEvent) => {
-  if (event.pointerType !== 'touch' || event.pointerId !== navBoxPanPointerId) return;
-  navBoxPanPointerId = null;
-  isDraggingNavBox.value = false;
-  isTouchActive.value = false;
-  handleImageMouseLeave();
-};
-
-const handleNavBoxWheel = (event: WheelEvent) => {
-  event.preventDefault();
-  event.stopPropagation();
-
-  // macbook touchpad
-  const isTouchPad = Math.abs(event.deltaY) < 4 && event.deltaMode === 0;
-
-  if (isTouchPad) {
-    // accumulate delta values until they reach a threshold
-    wheelDeltaAccumulator += event.deltaY;
-    if (Math.abs(wheelDeltaAccumulator) < wheelThreshold) {
-      return;
-    }
-    wheelDeltaAccumulator = 0;
-  }
-
-  const zoomFactor = isTouchPad ? 1 : 0.1; // Adjust sensitivity
-
-  wheelZoom(event, zoomFactor);
-};
-
-const handleNavBoxClick = (event: MouseEvent) => {
-  event.preventDefault();
-  event.stopPropagation();
-
-  // Suppress click if it was a drag
-  if (isDraggingNavBoxMoved.value) {
-    isDraggingNavBoxMoved.value = false;
-    return;
-  }
-
-  const imgIndex = activeImage.value;
-  const mainScale = scale.value[imgIndex];
-  const imgSize = imageSize.value[imgIndex];
-  const container = containerSize.value;
-  const rotation = imageRotate.value[imgIndex];
-
-  // 1. Get click coordinates relative to navContainer
-  const navContainerRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  const clickX_navContainer = event.clientX - navContainerRect.left;
-  const clickY_navContainer = event.clientY - navContainerRect.top;
-
-  // 2. Perform Inverse Transformation Chain
-  const nav_cW = navContainerSize.value.width;
-  const nav_cH = navContainerSize.value.height;
-  const angle = rotation * Math.PI / 180;
-  const cos_a = Math.cos(angle);
-  const sin_a = Math.sin(angle);
-
-  // Reverse CW rotation (apply CCW rotation to vector from navContainer center)
-  const p_final_relative_x = clickX_navContainer - nav_cW / 2;
-  const p_final_relative_y = clickY_navContainer - nav_cH / 2;
-
-  const p_nav_scaled_x = p_final_relative_x * cos_a + p_final_relative_y * sin_a; // CCW rotation
-  const p_nav_scaled_y = -p_final_relative_x * sin_a + p_final_relative_y * cos_a; // CCW rotation
-
-  // Recalculate navScale (same logic as in navBoxStyle)
-  const isRotated = rotation % 180 !== 0;
-  let actualNavScale;
-  if (isRotated) {
-    actualNavScale = Math.min(nav_cW / imgSize.height, nav_cH / imgSize.width);
-  } else {
-    actualNavScale = Math.min(nav_cW / imgSize.width, nav_cH / imgSize.height);
-  }
-
-  // Reverse scaling by navScale
-  const p_content_center_x = p_nav_scaled_x / actualNavScale;
-  const p_content_center_y = p_nav_scaled_y / actualNavScale;
-
-  // Reverse CCW rotation (apply CW rotation to p_content_center)
-  const V_scaled_x = p_content_center_x * cos_a - p_content_center_y * sin_a; // CW rotation
-  const V_scaled_y = p_content_center_x * sin_a + p_content_center_y * cos_a; // CW rotation
-
-  // Reverse scaling by mainScale
-  const V_x = V_scaled_x * mainScale;
-  const V_y = V_scaled_y * mainScale;
-
-  // Calculate new posX, posY
-  const cW = container.width;
-  const cH = container.height;
-  const iW = imgSize.width;
-  const iH = imgSize.height;
-
-  const newPosX = (cW / 2) - V_x - (iW / 2);
-  const newPosY = (cH / 2) - V_y - (iH / 2);
-
-  position.value[imgIndex] = { x: newPosX, y: newPosY };
-  clampPosition();
-};
-
-const updateNavBoxDragPosition = () => {
-  const event = latestMouseEvent.value;
-  const imgIndex = activeImage.value;
-  const imgSize = imageSize.value[imgIndex];
-  if (!event || imgSize.width === 0) return;
-
-  const d_box_x = event.clientX - lastMousePosition.value.x;
-  const d_box_y = event.clientY - lastMousePosition.value.y;
-
-  const rotation = imageRotate.value[imgIndex];
-  const isRotated = rotation % 180 !== 0;
-  let navScale;
-  if (isRotated) {
-    navScale = Math.min(navContainerSize.value.width / imgSize.height, navContainerSize.value.height / imgSize.width);
-  } else {
-    navScale = Math.min(navContainerSize.value.width / imgSize.width, navContainerSize.value.height / imgSize.height);
-  }
-
-  if (navScale > 0) {
-    const mainScale = scale.value[imgIndex];
-    const d_pos_x = - (d_box_x / navScale) * mainScale;
-    const d_pos_y = - (d_box_y / navScale) * mainScale;
-    
-    position.value[imgIndex].x += d_pos_x;
-    position.value[imgIndex].y += d_pos_y;
-  }
-
-  lastMousePosition.value = { x: event.clientX, y: event.clientY };
-  clampPosition();
-};
+const navigatorViewport = computed(() => ({
+  ...getViewportState(),
+  viewportWidth: containerSize.value.width,
+  viewportHeight: containerSize.value.height,
+  rotate: imageRotate.value[activeImage.value],
+  pannable: isGrabbing.value,
+}));
+function navigateImage(point: { normX: number; normY: number }) {
+  noTransition.value = true;
+  applyViewportState({ ...getViewportState(), ...point });
+  requestAnimationFrame(() => { noTransition.value = false; });
+}
+function zoomNavigator(factor: number) {
+  const size = containerSize.value;
+  zoomImage(size.width / 2, size.height / 2,
+    Math.min(maxScale.value, Math.max(minScale.value, scale.value[activeImage.value] * factor)));
+}
 
 onMounted(() => {
   // observe container size changes
@@ -1885,6 +1579,9 @@ const onImageReady = (nextIndex: number, preserveLoading: boolean = false) => {
         // coordinates so image navigation and thumbnail replacement retain
         // the same relative point in the image.
         applyViewportState(previousViewport, true);
+        // The silent restore avoids sync feedback, but consumers still need
+        // the new file's dimensions and identity after the buffer switch.
+        emit('viewport-change', getViewportState());
       } else {
         // Original logic: reset to center or zoom to cursor
         
@@ -2327,6 +2024,11 @@ function getViewportState() {
     normY: Math.min(Math.max(contentY / imgSize.height, 0), 1),
     sourceWidth: imgSize.width,
     sourceHeight: imgSize.height,
+    fileId: props.fileId,
+    viewportWidth: container.width,
+    viewportHeight: container.height,
+    rotate: imageRotate.value[imgIndex],
+    pannable: isGrabbing.value,
   };
 }
 
@@ -2414,6 +2116,9 @@ defineExpose({
   rotateView,
   getViewportState,
   applyViewportState,
+  zoomNavigator,
+  navigateImage,
+  toggleZoomFit,
   getCurrentImageSrc: () => imageSrc.value[activeImage.value] || '',
   clearPreloadCache: (filePath?: string) => {
     if (filePath) {

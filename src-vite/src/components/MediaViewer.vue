@@ -367,6 +367,7 @@
           :thumbnailSrc="file?.thumbnail || ''"
           :showThumbnailPlaceholder="showThumbnailPlaceholder"
           :showInlineLoading="mode === 2"
+          :suppressAutoNavigator="suppressAutoNavigator && !previewFullScreen"
           :nextFilePath="nextFilePath"
           :rotate="file?.rotate ?? 0"
           :isZoomFit="isZoomFit"
@@ -533,6 +534,7 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  suppressAutoNavigator: { type: Boolean, default: false },
   showThumbnailPlaceholder: {
     type: Boolean,
     default: false,
@@ -1325,6 +1327,9 @@ defineExpose({
   togglePlay,
   getViewportState,
   applyViewportState,
+  navigateImage: (point: { normX: number; normY: number }) => mediaRef.value?.navigateImage?.(point),
+  zoomNavigator: (factor: number) => mediaRef.value?.zoomNavigator?.(factor),
+  toggleZoomFit: () => mediaRef.value?.toggleZoomFit?.(),
   getCurrentImageSrc,
   clearPreloadCache,
   showMessage,

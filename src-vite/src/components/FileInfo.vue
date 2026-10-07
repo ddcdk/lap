@@ -85,8 +85,18 @@
                 />
               </div>
               <div class="absolute inset-0">
+                <ImageNavigator
+                  v-if="hasPreviewNavigator"
+                  class="h-full w-full"
+                  :source="fileInfo.thumbnail"
+                  :viewport="navigatorViewport"
+                  :sharpness="config.settings.navigatorSharpnessGrid"
+                  @navigate="emit('navigator-navigate', $event)"
+                  @zoom="emit('navigator-zoom', $event)"
+                  @toggle-fit="emit('navigator-toggle-fit')"
+                />
                 <img
-                  v-if="fileInfo?.thumbnail"
+                  v-else-if="fileInfo?.thumbnail"
                   :src="fileInfo.thumbnail"
                   class="h-full w-full object-contain"
                   :style="previewImageStyle"
@@ -449,6 +459,7 @@
 </template>
 
 <script setup lang="ts">
+import ImageNavigator from '@/components/ImageNavigator.vue';
 import { ref, nextTick, computed, watch, onBeforeUnmount, onMounted } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { useI18n } from 'vue-i18n';
@@ -497,6 +508,7 @@ import ImageHistogram from '@/components/ImageHistogram.vue';
 import MapView from '@/components/MapView.vue';
 
 const props = defineProps({
+  navigatorViewport: { type: Object, default: null },
   fileInfo: {
     type: Object,
     required: false
@@ -509,6 +521,10 @@ const uiStore = useUIStore();
 
 
 const emit = defineEmits([
+  'navigator-visible',
+  'navigator-navigate',
+  'navigator-zoom',
+  'navigator-toggle-fit',
   'close',
   'success',
   'toggleFavorite',
@@ -590,6 +606,9 @@ const canPreviewVideo = computed(() => (
 const canShowHistogram = computed(() => !isVideoFile.value);
 const activePreviewMode = computed(() => canShowHistogram.value ? config.infoPanel.previewMode : 'thumbnail');
 const isHistogramPreview = computed(() => activePreviewMode.value === 'histogram');
+const hasPreviewNavigator = computed(() => !!props.fileInfo?.thumbnail
+  && !isVideoFile.value && !!props.navigatorViewport
+  && props.navigatorViewport.fileId === props.fileInfo?.id);
 const histogramChannelLabel = computed(() => {
   const storedMask = Number(config.infoPanel.histogramChannels);
   const mask = storedMask === 16 || !Number.isInteger(storedMask) || storedMask < 0 || storedMask > 15
@@ -609,6 +628,10 @@ const histogramChannelLabel = computed(() => {
 const previewVideoRef = ref<HTMLVideoElement | null>(null);
 const showVideoPreview = ref(false);
 const isVideoPreviewReady = ref(false);
+watch(() => showPreviewPanel.value && !isHistogramPreview.value && hasPreviewNavigator.value && !showVideoPreview.value,
+  visible => emit('navigator-visible', visible), { immediate: true, flush: 'post' });
+onBeforeUnmount(() => emit('navigator-visible', false));
+
 const fileCollections = ref<Array<{ id: number; name: string }>>([]);
 let fileCollectionsRequestSeq = 0;
 const normalizedRotate = computed(() => {
