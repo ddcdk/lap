@@ -59,7 +59,8 @@
     ],
     "resources": {
       "resources/models/*": "models",
-      "resources/ffmpeg/*": "ffmpeg"
+      "resources/ffmpeg/*": "ffmpeg",
+      "../THIRD_PARTY_NOTICES.txt": "licenses/THIRD_PARTY_NOTICES.txt"
     }
   },
   "plugins": {
