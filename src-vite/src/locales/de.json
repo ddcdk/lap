@@ -714,7 +714,7 @@
       "set_desktop_wallpaper": "Als Desktop-Hintergrund festlegen",
       "show_info": "Info anzeigen",
       "remove_from_collection": "Aus Sammlung entfernen",
-      "create_montage": "Montage erstellen"
+      "create_montage": "Collage erstellen"
     },
     "calendar": {
       "monthly": "Monatlich",
@@ -1075,12 +1075,12 @@
       "overwrite_confirm": "Originaldatei überschreiben? Kann nicht rückgängig gemacht werden."
     },
     "montage": {
-      "title": "Montage",
+      "title": "Collage",
       "layout": "Layout",
       "grid": "Raster",
       "mosaic": "Mosaik",
       "pile": "Fotostapel",
-      "shuffle": "Zufallsmontage",
+      "shuffle": "Zufallscollage",
       "angle": "Winkel: {value}°",
       "scale": "Maßstab: {value} %",
       "shadow": "Schatten zeichnen",
@@ -1091,7 +1091,7 @@
       "photos": "Fotos ({count})",
       "add": "Hinzufügen",
       "photos_hint": "Ziehen zum Sortieren · Rechtsklick zum Entfernen",
-      "add_none": "Wählen Sie in Lap Fotos aus, die noch nicht in der Montage sind, und klicken Sie auf Hinzufügen.",
+      "add_none": "Wählen Sie in Lap Fotos aus, die noch nicht in der Collage sind, und klicken Sie auf Hinzufügen.",
       "hint_pile": "Fotostapel: ziehen zum Verschieben · mit dem Drehregler drehen und skalieren · das gegriffene Foto kommt nach vorne",
       "hint_grid": "Raster: Fotos füllen jede Zelle (zentriert zugeschnitten) · ein Foto auf ein anderes ziehen, um sie zu tauschen",
       "hint_mosaic": "Mosaik: lückenlos, Fotos behalten ihr Seitenverhältnis · ein Foto auf ein anderes ziehen, um sie zu tauschen",
@@ -1105,10 +1105,10 @@
       "background": "Hintergrund",
       "spacing": "Abstand",
       "border": "Rahmen",
-      "save_failed": "Montage konnte nicht gespeichert werden:",
-      "not_enough_photos": "Wählen Sie mindestens 2 Fotos aus, um eine Montage zu erstellen.",
-      "too_many_photos": "Nur die ersten {count} Fotos werden für die Montage verwendet.",
-      "save_title": "Montage speichern",
+      "save_failed": "Collage konnte nicht gespeichert werden:",
+      "not_enough_photos": "Wählen Sie mindestens 2 Fotos aus, um eine Collage zu erstellen.",
+      "too_many_photos": "Nur die ersten {count} Fotos werden für die Collage verwendet.",
+      "save_title": "Collage speichern",
       "folder": "Ordner",
       "file_name": "Dateiname",
       "browse": "Durchsuchen...",

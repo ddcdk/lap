@@ -714,7 +714,7 @@
       "set_desktop_wallpaper": "Beállítás háttérképként",
       "show_info": "Adatok megjelenítése",
       "remove_from_collection": "Eltávolítás a gyűjteményből",
-      "create_montage": "Montázs készítése"
+      "create_montage": "Kollázs készítése"
     },
     "calendar": {
       "monthly": "Havi",
@@ -1075,12 +1075,12 @@
       "overwrite_confirm": "Biztos, hogy felül akarja írni az eredeti fájlt? Ez a művelet nem vonható vissza."
     },
     "montage": {
-      "title": "Montázs",
+      "title": "Kollázs",
       "layout": "Elrendezés",
       "grid": "Rács",
       "mosaic": "Mozaik",
       "pile": "Képhalom",
-      "shuffle": "Véletlen montázs",
+      "shuffle": "Véletlen kollázs",
       "angle": "Szög: {value}°",
       "scale": "Méret: {value}%",
       "shadow": "Árnyékok rajzolása",
@@ -1091,7 +1091,7 @@
       "photos": "Fotók ({count})",
       "add": "Hozzáadás",
       "photos_hint": "Húzással átrendezés · jobb kattintással eltávolítás",
-      "add_none": "Jelöljön ki a Lapban olyan fotókat, amelyek még nincsenek a montázsban, majd kattintson a Hozzáadás gombra.",
+      "add_none": "Jelöljön ki a Lapban olyan fotókat, amelyek még nincsenek a kollázsban, majd kattintson a Hozzáadás gombra.",
       "hint_pile": "Képhalom: húzással mozgatás · a tárcsával forgatás és átméretezés · a megfogott fotó előre kerül",
       "hint_grid": "Rács: a fotók kitöltik a cellákat (középre vágva) · húzzon egy fotót egy másikra a cseréhez",
       "hint_mosaic": "Mozaik: hézagok nélkül, a fotók megtartják arányaikat · húzzon egy fotót egy másikra a cseréhez",
@@ -1105,10 +1105,10 @@
       "background": "Háttér",
       "spacing": "Térköz",
       "border": "Keret",
-      "save_failed": "A montázs mentése sikertelen:",
-      "not_enough_photos": "Montázs készítéséhez jelöljön ki legalább 2 fotót.",
-      "too_many_photos": "Csak az első {count} fotó kerül a montázsba.",
-      "save_title": "Montázs mentése",
+      "save_failed": "A kollázs mentése sikertelen:",
+      "not_enough_photos": "Kollázs készítéséhez jelöljön ki legalább 2 fotót.",
+      "too_many_photos": "Csak az első {count} fotó kerül a kollázsba.",
+      "save_title": "Kollázs mentése",
       "folder": "Mappa",
       "file_name": "Fájlnév",
       "browse": "Tallózás...",

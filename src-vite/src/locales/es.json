@@ -714,7 +714,7 @@
       "set_desktop_wallpaper": "Establecer como fondo de escritorio",
       "show_info": "Ver info",
       "remove_from_collection": "Quitar de la colección",
-      "create_montage": "Crear montaje"
+      "create_montage": "Crear collage"
     },
     "calendar": {
       "monthly": "Mensual",
@@ -1075,12 +1075,12 @@
       "overwrite_confirm": "¿Sobrescribir archivo original? No se puede deshacer."
     },
     "montage": {
-      "title": "Montaje",
+      "title": "Collage",
       "layout": "Diseño",
       "grid": "Cuadrícula",
       "mosaic": "Mosaico",
       "pile": "Pila de fotos",
-      "shuffle": "Montaje aleatorio",
+      "shuffle": "Collage aleatorio",
       "angle": "Ángulo: {value}°",
       "scale": "Escala: {value} %",
       "shadow": "Dibujar sombras",
@@ -1091,7 +1091,7 @@
       "photos": "Fotos ({count})",
       "add": "Añadir",
       "photos_hint": "Arrastrar para reordenar · clic derecho para quitar",
-      "add_none": "Seleccione en Lap fotos que aún no estén en el montaje y haga clic en Añadir.",
+      "add_none": "Seleccione en Lap fotos que aún no estén en el collage y haga clic en Añadir.",
       "hint_pile": "Pila de fotos: arrastrar para mover · el dial gira y redimensiona · la foto que toma pasa al frente",
       "hint_grid": "Cuadrícula: las fotos llenan cada celda (recorte centrado) · arrastre una foto sobre otra para intercambiarlas",
       "hint_mosaic": "Mosaico: sin huecos, las fotos conservan sus proporciones · arrastre una foto sobre otra para intercambiarlas",
@@ -1105,10 +1105,10 @@
       "background": "Fondo",
       "spacing": "Espaciado",
       "border": "Borde",
-      "save_failed": "No se pudo guardar el montaje:",
-      "not_enough_photos": "Selecciona al menos 2 fotos para crear un montaje.",
-      "too_many_photos": "Solo se usan las primeras {count} fotos en el montaje.",
-      "save_title": "Guardar montaje",
+      "save_failed": "No se pudo guardar el collage:",
+      "not_enough_photos": "Selecciona al menos 2 fotos para crear un collage.",
+      "too_many_photos": "Solo se usan las primeras {count} fotos en el collage.",
+      "save_title": "Guardar collage",
       "folder": "Carpeta",
       "file_name": "Nombre del archivo",
       "browse": "Examinar...",

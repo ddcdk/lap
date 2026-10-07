@@ -714,7 +714,7 @@
       "set_desktop_wallpaper": "Ustaw jako tapetę pulpitu",
       "show_info": "Pokaż informacje",
       "remove_from_collection": "Usuń z kolekcji",
-      "create_montage": "Utwórz montaż"
+      "create_montage": "Utwórz kolaż"
     },
     "calendar": {
       "monthly": "Miesięcznie",
@@ -1075,12 +1075,12 @@
       "overwrite_confirm": "Czy na pewno chcesz zastąpić oryginalny plik? Tej czynności nie można cofnąć."
     },
     "montage": {
-      "title": "Montaż",
+      "title": "Kolaż",
       "layout": "Układ",
       "grid": "Siatka",
       "mosaic": "Mozaika",
       "pile": "Stos zdjęć",
-      "shuffle": "Losowy montaż",
+      "shuffle": "Losowy kolaż",
       "angle": "Kąt: {value}°",
       "scale": "Skala: {value}%",
       "shadow": "Rysuj cienie",
@@ -1091,7 +1091,7 @@
       "photos": "Zdjęcia ({count})",
       "add": "Dodaj",
       "photos_hint": "Przeciągnij, aby zmienić kolejność · prawy klik, aby usunąć",
-      "add_none": "Zaznacz w Lap zdjęcia, których nie ma jeszcze w montażu, a następnie kliknij Dodaj.",
+      "add_none": "Zaznacz w Lap zdjęcia, których nie ma jeszcze w kolażu, a następnie kliknij Dodaj.",
       "hint_pile": "Stos zdjęć: przeciągnij, aby przesunąć · pokrętło obraca i skaluje · chwycone zdjęcie trafia na wierzch",
       "hint_grid": "Siatka: zdjęcia wypełniają każdą komórkę (kadrowanie do środka) · przeciągnij zdjęcie na inne, aby je zamienić",
       "hint_mosaic": "Mozaika: bez przerw, zdjęcia zachowują proporcje · przeciągnij zdjęcie na inne, aby je zamienić",
@@ -1105,10 +1105,10 @@
       "background": "Tło",
       "spacing": "Odstęp",
       "border": "Ramka",
-      "save_failed": "Nie udało się zapisać montażu:",
-      "not_enough_photos": "Wybierz co najmniej 2 zdjęcia, aby utworzyć montaż.",
-      "too_many_photos": "W montażu użyto tylko pierwszych {count} zdjęć.",
-      "save_title": "Zapisz montaż",
+      "save_failed": "Nie udało się zapisać kolażu:",
+      "not_enough_photos": "Wybierz co najmniej 2 zdjęcia, aby utworzyć kolaż.",
+      "too_many_photos": "W kolażu użyto tylko pierwszych {count} zdjęć.",
+      "save_title": "Zapisz kolaż",
       "folder": "Folder",
       "file_name": "Nazwa pliku",
       "browse": "Przeglądaj...",

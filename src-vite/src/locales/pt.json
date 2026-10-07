@@ -714,7 +714,7 @@
       "set_desktop_wallpaper": "Definir como papel de parede",
       "show_info": "Mostrar info",
       "remove_from_collection": "Remover da coleção",
-      "create_montage": "Criar montagem"
+      "create_montage": "Criar colagem"
     },
     "calendar": {
       "monthly": "Mensal",
@@ -1075,12 +1075,12 @@
       "overwrite_confirm": "Sobrescrever arquivo original? Irreversível."
     },
     "montage": {
-      "title": "Montagem",
+      "title": "Colagem",
       "layout": "Layout",
       "grid": "Grade",
       "mosaic": "Mosaico",
       "pile": "Pilha de fotos",
-      "shuffle": "Montagem aleatória",
+      "shuffle": "Colagem aleatória",
       "angle": "Ângulo: {value}°",
       "scale": "Escala: {value}%",
       "shadow": "Desenhar sombras",
@@ -1091,7 +1091,7 @@
       "photos": "Fotos ({count})",
       "add": "Adicionar",
       "photos_hint": "Arraste para reordenar · clique direito para remover",
-      "add_none": "Selecione no Lap fotos que ainda não estão na montagem e clique em Adicionar.",
+      "add_none": "Selecione no Lap fotos que ainda não estão na colagem e clique em Adicionar.",
       "hint_pile": "Pilha de fotos: arraste para mover · o dial gira e redimensiona · a foto agarrada vem para a frente",
       "hint_grid": "Grade: as fotos preenchem cada célula (corte centralizado) · arraste uma foto sobre outra para trocá-las",
       "hint_mosaic": "Mosaico: sem espaços, as fotos mantêm as proporções · arraste uma foto sobre outra para trocá-las",
@@ -1105,10 +1105,10 @@
       "background": "Fundo",
       "spacing": "Espaçamento",
       "border": "Borda",
-      "save_failed": "Falha ao salvar a montagem:",
-      "not_enough_photos": "Selecione pelo menos 2 fotos para criar uma montagem.",
-      "too_many_photos": "Apenas as primeiras {count} fotos são usadas na montagem.",
-      "save_title": "Salvar montagem",
+      "save_failed": "Falha ao salvar a colagem:",
+      "not_enough_photos": "Selecione pelo menos 2 fotos para criar uma colagem.",
+      "too_many_photos": "Apenas as primeiras {count} fotos são usadas na colagem.",
+      "save_title": "Salvar colagem",
       "folder": "Pasta",
       "file_name": "Nome do arquivo",
       "browse": "Procurar...",

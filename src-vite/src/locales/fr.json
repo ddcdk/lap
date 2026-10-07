@@ -714,7 +714,7 @@
       "set_desktop_wallpaper": "Définir comme fond d'écran",
       "show_info": "Afficher info",
       "remove_from_collection": "Retirer de la collection",
-      "create_montage": "Créer un montage"
+      "create_montage": "Créer un collage"
     },
     "calendar": {
       "monthly": "Mensuel",
@@ -1075,12 +1075,12 @@
       "overwrite_confirm": "Écraser le fichier original ? Irréversible."
     },
     "montage": {
-      "title": "Montage",
+      "title": "Collage",
       "layout": "Disposition",
       "grid": "Grille",
       "mosaic": "Mosaïque",
       "pile": "Pile de photos",
-      "shuffle": "Montage aléatoire",
+      "shuffle": "Collage aléatoire",
       "angle": "Angle : {value}°",
       "scale": "Échelle : {value} %",
       "shadow": "Dessiner des ombres",
@@ -1091,7 +1091,7 @@
       "photos": "Photos ({count})",
       "add": "Ajouter",
       "photos_hint": "Glisser pour réordonner · clic droit pour retirer",
-      "add_none": "Sélectionnez dans Lap des photos qui ne sont pas encore dans le montage, puis cliquez sur Ajouter.",
+      "add_none": "Sélectionnez dans Lap des photos qui ne sont pas encore dans le collage, puis cliquez sur Ajouter.",
       "hint_pile": "Pile de photos : glisser pour déplacer · le cadran tourne et redimensionne · la photo saisie passe devant",
       "hint_grid": "Grille : les photos remplissent chaque case (recadrage centré) · glisser une photo sur une autre pour les échanger",
       "hint_mosaic": "Mosaïque : sans vide, les photos gardent leurs proportions · glisser une photo sur une autre pour les échanger",
@@ -1105,10 +1105,10 @@
       "background": "Fond",
       "spacing": "Espacement",
       "border": "Bordure",
-      "save_failed": "Échec de l'enregistrement du montage :",
-      "not_enough_photos": "Sélectionnez au moins 2 photos pour créer un montage.",
-      "too_many_photos": "Seules les {count} premières photos sont utilisées dans le montage.",
-      "save_title": "Enregistrer le montage",
+      "save_failed": "Échec de l'enregistrement du collage :",
+      "not_enough_photos": "Sélectionnez au moins 2 photos pour créer un collage.",
+      "too_many_photos": "Seules les {count} premières photos sont utilisées dans le collage.",
+      "save_title": "Enregistrer le collage",
       "folder": "Dossier",
       "file_name": "Nom du fichier",
       "browse": "Parcourir...",
