@@ -11,6 +11,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { emit } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useConfigStore } from '@/stores/configStore';
 import { useLibraryStore } from '@/stores/libraryStore';
@@ -110,9 +111,15 @@ onMounted(async () => {
     // Continue anyway - user can retry from UI
   } finally {
     isReady.value = true;
+    if (win.label === 'main') {
+      performance.mark('startup-library-state-ready');
+      void invoke('record_startup_stage', { stage: 'library-state-ready' }).catch(console.error);
+    }
     // Show window after everything is loaded (main window only)
     if (win.label === 'main') {
       await win.show();
+      performance.mark('startup-window-shown');
+      void invoke('record_startup_stage', { stage: 'window-shown' }).catch(console.error);
     }
   }
 });

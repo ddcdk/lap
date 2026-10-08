@@ -1854,7 +1854,7 @@ export async function listenImageSearchModelDownloadProgress(callback) {
 // generate embedding
 export async function generateEmbedding(fileId) {
   try {
-    const result = await invoke('generate_embedding', { fileId });
+    const result = await invoke('generate_embedding', { fileId, libraryId: libConfig._libraryId });
     return result;
   } catch (error) {
     console.error('generateEmbedding error:', error);
@@ -1864,11 +1864,12 @@ export async function generateEmbedding(fileId) {
 
 // search similar images
 export async function searchSimilarImages(params) {
+  const libraryId = libConfig._libraryId;
   try {
     if (params?.searchText) {
       await setImageSearchModel(config.settings.imageSearch?.model || 0);
     }
-    const results = await invoke('search_similar_images', { params });
+    const results = await invoke('search_similar_images', { params, libraryId });
     return results || [];
   } catch (error) {
     console.error('searchSimilarImages error:', error);

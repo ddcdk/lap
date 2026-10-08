@@ -743,7 +743,7 @@
 
 <script setup lang="ts">
 
-import { ref, watch, computed, createVNode, onMounted, onBeforeUnmount, nextTick, render, markRaw } from 'vue';
+import { defineAsyncComponent, ref, watch, computed, createVNode, onMounted, onBeforeUnmount, nextTick, render, markRaw } from 'vue';
 import { emit as tauriEmit, listen } from '@tauri-apps/api/event';
 import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -783,7 +783,7 @@ import { isWin, isMac, isLinux, setTheme, separator,
 import DropDownSelect from '@/components/DropDownSelect.vue';
 import ProgressBar from '@/components/ProgressBar.vue';
 import GridView  from '@/components/GridView.vue';
-import PhotoMapView from '@/components/PhotoMapView.vue';
+const PhotoMapView = defineAsyncComponent(() => import('@/components/PhotoMapView.vue'));
 import ContextMenu from '@/components/ContextMenu.vue';
 import { MAX_NATIVE_DRAG_FILES, createDragPreview, isWindowDragEdge, isNativeFileDragActive, isReturningNativeFileDrag, startNativeFileDrag } from '@/common/nativeDrag';
 import { isOriginalUnavailable, setFileAccessibility, setFolderAccessibility, requiresOriginalAction } from '@/common/availability';
@@ -10865,6 +10865,14 @@ function stopDragging() {
   document.removeEventListener('mousemove', handleMouseMove);
   document.removeEventListener('mouseup', stopDragging);
 }
+
+const emit = defineEmits<{ startupReady: [] }>();
+let startupReadyEmitted = false;
+watch([contentReady, showWelcomeContent], ([ready, welcome]) => {
+  if (startupReadyEmitted || (!ready && !welcome)) return;
+  startupReadyEmitted = true;
+  void nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => emit('startupReady'))));
+}, { immediate: true });
 
 defineExpose({
   focusContent: activateContentPane,

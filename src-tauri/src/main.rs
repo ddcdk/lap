@@ -42,6 +42,7 @@ mod t_protocol;
 mod t_similar;
 mod t_sqlite;
 mod t_storage;
+mod t_startup;
 mod t_utils;
 mod t_video;
 
@@ -52,6 +53,7 @@ async fn main() {
         eprintln!("Unhandled panic: {}", panic_info);
     }));
 
+    let startup = t_startup::StartupState::default();
     let builder = tauri::Builder::default();
     let builder = t_protocol::register_protocols(builder);
 
@@ -72,6 +74,7 @@ async fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(startup)
         .manage(t_video::VideoManager::default())
         .manage(t_ai::AiState(std::sync::Mutex::new(t_ai::AiEngine::new())))
         .manage(t_face::FaceState(std::sync::Arc::new(
@@ -100,6 +103,7 @@ async fn main() {
         .manage(t_dedup::DedupState::default())
         .manage(t_similar::SimilarState::default())
         .setup(|_app| {
+            t_startup::mark(&_app.handle(), "setup-started");
             t_video::init_ffmpeg_path(&_app.handle());
             t_config::set_app_identifier(&_app.config().identifier);
             t_menu::install_app_menu(&_app.handle())?;
@@ -117,9 +121,14 @@ async fn main() {
             // wheel+ctrlKey events for touchpad pinch. Touchscreen pinch is still
             // handled by our pointer-event logic (with `touch-action: none`).
 
+            t_startup::mark(&_app.handle(), "database-started");
             // Create the database on startup
-            if let Err(e) = t_sqlite::create_db() {
-                eprintln!("Failed to initialize database: {}", e);
+            match t_sqlite::create_db() {
+                Ok(()) => t_startup::mark(&_app.handle(), "database-ready"),
+                Err(error) => {
+                    t_startup::mark(&_app.handle(), "database-failed");
+                    eprintln!("Failed to initialize database: {}", error);
+                }
             }
 
             // Initialize video HTTP server for Linux
@@ -133,54 +142,8 @@ async fn main() {
                 if let Err(e) = t_utils::restore_album_scopes(&_app.handle()) {
                     eprintln!("Failed to restore asset scopes: {}", e);
                 }
-                let generation = t_utils::album_accessibility_generation();
-                tauri::async_runtime::spawn_blocking(move || {
-                    if let Ok(mut albums) = t_sqlite::Album::get_all_albums() {
-                        t_utils::refresh_all_album_accessibility_if_current(&mut albums, generation);
-                    }
-                });
             }
-
-            // Initialize AI Engine
-            let app_handle = _app.handle();
-            let ai_state = _app.state::<t_ai::AiState>();
-            let mut ai_engine = ai_state.0.lock().unwrap();
-            match ai_engine.load_models(app_handle) {
-                Ok(_) => println!("AI Engine started successfully"),
-                Err(e) => {
-                    eprintln!("Failed to start AI Engine: {}", e);
-                    #[cfg(target_os = "windows")]
-                    {
-                        let arch_key = if cfg!(target_arch = "aarch64") {
-                            r"HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\ARM64"
-                        } else {
-                            r"HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64"
-                        };
-                        let result = std::process::Command::new("reg")
-                            .args(["query", arch_key, "/v", "Installed"])
-                            .stdout(std::process::Stdio::null())
-                            .status();
-                        let installed = result.is_ok() && result.unwrap().success();
-                        if !installed {
-                            let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
-                            let url = format!("https://aka.ms/vs/17/release/vc_redist.{}.exe", arch);
-                            let _ = std::process::Command::new("powershell")
-                                .args(["-NoProfile", "-Command", &format!(
-                                    r#"$wsh = New-Object -ComObject Wscript.Shell; $wsh.Popup('Lap requires the Microsoft Visual C++ Redistributable.`n`nA download page will open in your browser.`nPlease install it, then restart Lap.', 0, 'Lap - Missing Dependency', 0x30); Start-Process '{}'"#,
-                                    url
-                                )])
-                                .stdout(std::process::Stdio::null())
-                                .stderr(std::process::Stdio::null())
-                                .status();
-                            std::process::exit(1);
-                        }
-                    }
-                }
-            }
-
-            if !t_sqlite::is_database_corrupted() {
-                t_utils::start_folder_mtime_sync(_app.handle().clone());
-            }
+            t_startup::mark(&_app.handle(), "setup-ready");
 
             // Open devtools in development mode
             // #[cfg(debug_assertions)] // only include this block in debug builds
@@ -231,6 +194,9 @@ async fn main() {
             t_menu::handle_menu_event(app, event);
         })
         .invoke_handler(tauri::generate_handler![
+            t_startup::record_startup_stage,
+            t_startup::finish_startup,
+            t_startup::get_ai_initialization_status,
             t_drag::start_file_drag,
             t_drag::cancel_file_drag,
             // library

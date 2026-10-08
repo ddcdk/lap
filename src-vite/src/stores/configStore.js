@@ -2,6 +2,8 @@
  * Config Store - Global application configuration
  */
 import { defineStore } from 'pinia';
+import { i18n, loadLanguage } from '@/common/i18n';
+let languageRequest = 0;
 import { SIDEBAR, MAP_MARKER_SIZES } from '@/common/constants';
 
 export const useConfigStore = defineStore('configStore', {
@@ -256,8 +258,16 @@ export const useConfigStore = defineStore('configStore', {
         video: normalizeGroup('video'),
       };
     },
-    setLanguage(language) {
-      this.settings.language = language;
+    async setLanguage(language) {
+      const request = ++languageRequest;
+      try {
+        await loadLanguage(language);
+        if (request !== languageRequest) return;
+        this.settings.language = language;
+        i18n.global.locale.value = language;
+      } catch (error) {
+        console.error('Failed to switch language:', error);
+      }
     },
     setDateTimeFormat(dateTimeFormat) {
       this.settings.dateTimeFormat = dateTimeFormat;

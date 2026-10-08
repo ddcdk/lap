@@ -161,7 +161,7 @@
           <h2 class="text-lg font-medium">{{ $t('library.database_corrupted') }}</h2>
           <p class="text-sm text-base-content/60">{{ $t('library.database_corrupted_hint') }}</p>
         </div>
-        <Content v-else-if="databaseCorrupted === false" ref="contentRef" :key="libraryVersion" :titlebar="activeSidebarButton.text" :libraryEmpty="libraryEmpty"/>
+        <Content v-else-if="databaseCorrupted === false" ref="contentRef" :key="libraryVersion" :titlebar="activeSidebarButton.text" :libraryEmpty="libraryEmpty" @startup-ready="finishStartup"/>
       </div>
     </div>
 
@@ -182,7 +182,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount, onMounted, watch, nextTick } from 'vue';
+import { defineAsyncComponent, ref, computed, onBeforeUnmount, onMounted, watch, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { emit, listen } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -199,20 +199,20 @@ import { getAppConfig, switchLibrary, cancelIndexing, cancelFaceIndex } from '@/
 // vue components
 import Library from '@/components/Library.vue';
 import AlbumList from '@/components/AlbumList.vue';
-import SmartAlbumList from '@/components/SmartAlbumList.vue';
-import ImageSearch from '@/components/ImageSearch.vue';
-import Tag from '@/components/Tag.vue';
-import Calendar from '@/components/Calendar.vue';
-import Location from '@/components/Location.vue';
-import Person from '@/components/Person.vue';
-import Camera from '@/components/Camera.vue';
+const SmartAlbumList = defineAsyncComponent(() => import('@/components/SmartAlbumList.vue'));
+const ImageSearch = defineAsyncComponent(() => import('@/components/ImageSearch.vue'));
+const Tag = defineAsyncComponent(() => import('@/components/Tag.vue'));
+const Calendar = defineAsyncComponent(() => import('@/components/Calendar.vue'));
+const Location = defineAsyncComponent(() => import('@/components/Location.vue'));
+const Person = defineAsyncComponent(() => import('@/components/Person.vue'));
+const Camera = defineAsyncComponent(() => import('@/components/Camera.vue'));
 
 import TitleBar from '@/components/TitleBar.vue';
 import TButton from '@/components/TButton.vue';
 import Content from '@/components/Content.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
 import CollectionTray from '@/components/CollectionTray.vue';
-import ManageLibraries from '@/components/ManageLibraries.vue';
+const ManageLibraries = defineAsyncComponent(() => import('@/components/ManageLibraries.vue'));
 import iconLogo from '@/assets/images/icon.png';
 
 import {
@@ -447,6 +447,19 @@ const libraryMenuItems = computed(() => {
 });
 
 
+let startupFinished = false;
+async function finishStartup() {
+  if (startupFinished) return;
+  startupFinished = true;
+  uiStore.startupReady = true;
+  performance.mark('startup-first-content-ready');
+  void invoke('finish_startup', { model: config.settings.imageSearch.model || 0 }).catch(console.error);
+  if (config.settings.autoCheckUpdates !== false) void checkForUpdates(false);
+}
+watch(databaseCorrupted, corrupted => {
+  if (corrupted) void nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => finishStartup())));
+});
+
 onMounted(async () => {
   window.addEventListener('keydown', handleHomeKeyDown);
   unlistenOpenPreferences = await listen('app-open-preferences', () => {
@@ -486,9 +499,6 @@ onMounted(async () => {
     console.error('Failed to get app name:', e);
   }
 
-  if (config.settings.autoCheckUpdates !== false) {
-    void checkForUpdates(false);
-  }
 });
 
 onBeforeUnmount(() => {

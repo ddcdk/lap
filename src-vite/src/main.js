@@ -1,5 +1,5 @@
 import { createApp } from 'vue'
-import { createI18n } from 'vue-i18n'
+import { i18n, initializeLanguage } from '@/common/i18n'
 import { createPinia } from 'pinia'
 import piniaPersistedState from 'pinia-plugin-persistedstate'
 import { emit, listen } from '@tauri-apps/api/event'
@@ -12,22 +12,7 @@ import App from '@/App.vue'
 import { useConfigStore } from '@/stores/configStore'
 import '@/assets/app.css'
 
-// I18n
-import en from '@/locales/en.json'
-import de from '@/locales/de.json'
-import es from '@/locales/es.json'
-import fr from '@/locales/fr.json'
-import it from '@/locales/it.json'
-import hu from '@/locales/hu.json'
-import nl from '@/locales/nl.json'
-import pl from '@/locales/pl.json'
-import pt from '@/locales/pt.json'
-import ru from '@/locales/ru.json'
-import uk from '@/locales/uk.json'
-import zhCN from '@/locales/zh-CN.json'
-import zhTW from '@/locales/zh-TW.json'
-import ja from '@/locales/ja.json'
-import ko from '@/locales/ko.json'
+performance.mark('startup-frontend-started')
 
 // Create the app instance
 const app = createApp(App)
@@ -40,6 +25,7 @@ const config = useConfigStore() // Use the config store
 const currentWindowLabel = getCurrentWebviewWindow().label
 const isMainWindow = currentWindowLabel === 'main'
 const isSettingsWindow = currentWindowLabel === 'settings'
+let settingsSyncRequest = 0
 
 // Fetch the OS locale once so "follow system" date/time formatting has a value.
 void getOsLocale().then((loc) => config.setSystemLocale(loc)).catch(() => {})
@@ -49,39 +35,27 @@ if (isMainWindow) {
     void emit('config-settings-synced', JSON.parse(JSON.stringify(state.settings)))
   })
 } else {
-  listen('config-settings-synced', (event) => {
+  listen('config-settings-synced', async (event) => {
+    const request = ++settingsSyncRequest
     if (isSettingsWindow) {
       // Settings also needs language updates made from the welcome screen.
       config.setLanguage(event.payload.language)
     } else {
-      Object.assign(config.settings, event.payload)
+      const { language, ...settings } = event.payload
+      await config.setLanguage(language)
+      if (request !== settingsSyncRequest) return
+      Object.assign(config.settings, settings)
     }
   })
 }
 
-// Create the I18n instance
-const i18n = createI18n({
-  legacy: false, // Disable legacy mode
-  locale: config.settings.language, // Use language setting from config store
-  fallbackLocale: "en",
-  messages: {
-    en,
-    de,
-    es,
-    fr,
-    it,
-    hu,
-    nl,
-    pl,
-    pt,
-    ru,
-    uk,
-    zh: zhCN,
-    'zh-TW': zhTW,
-    ja,
-    ko
-  },
-})
+// Load only the active language and English before components read messages.
+const initialLanguage = config.settings.language
+const loadedLanguage = await initializeLanguage(initialLanguage)
+if (config.settings.language === initialLanguage) config.settings.language = loadedLanguage
+else i18n.global.locale.value = config.settings.language
+performance.mark('startup-language-ready')
+if (isMainWindow) void invoke('record_startup_stage', { stage: 'language-ready' }).catch(console.error)
 
 // Set up global properties
 app.config.globalProperties.$invoke = invoke
@@ -92,6 +66,8 @@ app.use(i18n)
 
 // Mount the app
 app.mount('#app')
+performance.mark('startup-app-mounted')
+if (isMainWindow) void invoke('record_startup_stage', { stage: 'app-mounted' }).catch(console.error)
 
 // Listen for events
 if (isMainWindow) {

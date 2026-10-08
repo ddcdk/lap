@@ -768,7 +768,8 @@ const loadAlbumCovers = async () => {
 onMounted( async () => {
   document.addEventListener('pointerdown', handleReorderOutsidePointerDown, true);
   if (albums.value.length === 0) {
-    albums.value = await getAllAlbums(true);
+    // Startup defers the full filesystem probe until the first content paint.
+    albums.value = await getAllAlbums(uiStore.startupReady || !isMainPane.value);
     void refreshAlbumVisibleCounts();
     await loadAlbumCovers();
     isLoading.value = false;
@@ -875,6 +876,7 @@ onMounted( async () => {
   });
 
   unlistenAlbumsRefreshed = await listen('albums-refreshed', async (event: any) => {
+    if (event.payload?.libraryId && event.payload.libraryId !== libConfig._libraryId) return;
     const refreshedAlbums = Array.isArray(event.payload?.albums) ? event.payload.albums : [];
     const refreshFolders = event.payload?.refreshFolders !== false;
     const selectedAlbumId = selection.albumId.value;

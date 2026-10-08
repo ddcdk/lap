@@ -32,7 +32,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex, RwLock};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 // Scoped refreshes and RAW thumbnail requests can open several connections.
 // Keep their library stable until all reads and writes have completed.
@@ -3213,23 +3213,31 @@ pub fn check_ai_status(state: State<t_ai::AiState>) -> String {
 }
 
 #[tauri::command]
-pub fn get_image_search_model_status(
+pub async fn get_image_search_model_status(
     app_handle: AppHandle,
-    state: State<t_ai::AiState>,
-) -> t_ai::ImageSearchModelStatus {
-    let ai_engine = state.0.lock().unwrap();
-    ai_engine.model_status(&app_handle)
+) -> Result<t_ai::ImageSearchModelStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<t_ai::AiState>();
+        let ai_engine = state.0.lock().map_err(|e| e.to_string())?;
+        Ok(ai_engine.model_status(&app_handle))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn set_image_search_model(
     app_handle: AppHandle,
-    state: State<'_, t_ai::AiState>,
     model: i64,
 ) -> Result<t_ai::ImageSearchModelStatus, String> {
-    let mut ai_engine = state.0.lock().unwrap();
-    ai_engine.set_text_model(&app_handle, t_ai::ImageSearchTextModel::from_i64(model))?;
-    Ok(ai_engine.model_status(&app_handle))
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::t_startup::ensure_ai(&app_handle, Some(model))?;
+        let state = app_handle.state::<t_ai::AiState>();
+        let ai_engine = state.0.lock().map_err(|e| e.to_string())?;
+        Ok(ai_engine.model_status(&app_handle))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -3246,18 +3254,39 @@ pub async fn cancel_multilingual_image_search_model_download(
 
 /// generate embedding for a file
 #[tauri::command]
-pub fn generate_embedding(state: State<t_ai::AiState>, file_id: i64) -> Result<String, String> {
-    AFile::generate_embedding(&state, file_id)
+pub async fn generate_embedding(
+    app_handle: AppHandle,
+    file_id: i64,
+    library_id: Option<String>,
+) -> Result<String, String> {
+    let library_id = library_id.unwrap_or(t_config::current_library_id()?);
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::t_startup::ensure_ai(&app_handle, None)?;
+        with_current_library(&library_id, || {
+            AFile::generate_embedding(&app_handle.state::<t_ai::AiState>(), file_id)
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // search similar images
 #[tauri::command]
 pub async fn search_similar_images(
-    state: State<'_, t_ai::AiState>,
+    app_handle: AppHandle,
     params: ImageSearchParams,
+    library_id: Option<String>,
 ) -> Result<Vec<AFile>, String> {
-    AFile::search_similar_images(&state, params)
-        .map_err(|e| format!("Error while searching similar images: {}", e))
+    let library_id = library_id.unwrap_or(t_config::current_library_id()?);
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::t_startup::ensure_ai(&app_handle, None)?;
+        with_current_library(&library_id, || {
+            AFile::search_similar_images(&app_handle.state::<t_ai::AiState>(), params)
+                .map_err(|e| format!("Error while searching similar images: {}", e))
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

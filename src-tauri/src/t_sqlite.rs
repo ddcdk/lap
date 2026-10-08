@@ -6364,11 +6364,11 @@ impl AFile {
 
     /// check ai status
     pub fn check_ai_status(state: &State<t_ai::AiState>) -> String {
-        let engine = state.0.lock().unwrap();
-        if engine.is_loaded() {
-            "AI Models Loaded".to_string()
-        } else {
-            "AI Engine Initialized (Models Not Loaded)".to_string()
+        match state.0.try_lock() {
+            Ok(engine) if engine.is_loaded() => "AI Models Loaded".into(),
+            Ok(_) => "AI Engine Initialized (Models Not Loaded)".into(),
+            Err(std::sync::TryLockError::WouldBlock) => "AI Models Loading or Busy".into(),
+            Err(error) => format!("AI initialization failed: {}", error),
         }
     }
 

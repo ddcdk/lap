@@ -2140,7 +2140,7 @@ pub fn start_folder_mtime_sync(app_handle: tauri::AppHandle) {
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
         .wrapping_add(1);
 
-    tauri::async_runtime::spawn(async move {
+    tauri::async_runtime::spawn_blocking(move || {
         match sync_dirty_folders_by_mtime(generation) {
             Ok((result, tasks)) => {
                 if !sync_generation_valid(generation) {
@@ -2970,6 +2970,10 @@ fn schedule_synced_file_processing(app_handle: tauri::AppHandle, task: SyncedFil
                 return;
             }
             if !AFile::is_album_visible(task.file_id).unwrap_or(false) {
+                return;
+            }
+            if let Err(error) = crate::t_startup::ensure_ai(&app_handle_for_embedding, None) {
+                eprintln!("Failed to initialize AI for embedding: {}", error);
                 return;
             }
             let ai_state: tauri::State<crate::t_ai::AiState> = app_handle_for_embedding.state();
@@ -3960,6 +3964,10 @@ async fn process_thumbnail_task(
     let file_id = task.file_id;
     let file_path = task.file_path.clone();
     let embedding_ok = tauri::async_runtime::spawn_blocking(move || {
+        if let Err(error) = crate::t_startup::ensure_ai(&app_handle_for_embedding, None) {
+            eprintln!("Failed to initialize AI for embedding: {}", error);
+            return false;
+        }
         let ai_state: State<crate::t_ai::AiState> = app_handle_for_embedding.state();
         match crate::t_sqlite::AFile::generate_embedding(&ai_state, file_id) {
             Ok(_) => true,
