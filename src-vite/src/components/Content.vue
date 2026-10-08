@@ -149,10 +149,10 @@
           <!-- toggle select mode -->
           <TButton
             :icon="IconSelection"
-            :tooltip="$t('toolbar.filter.select_mode')"
+            :tooltip="$t(selectMode ? 'toolbar.filter.exit_select_mode' : 'toolbar.filter.select_mode')"
             :selected="selectMode"
             :disabled="isScanStreamingMode || isMapVisible"
-            @click="handleSelectMode(!selectMode)"
+            @click="toggleSelectMode"
           />
 
           <!-- toggle dedup panel -->
@@ -207,6 +207,21 @@
             showFilmstripLayout ? (config.settings.showStatusBar ? 'mt-12 mb-8' : 'mt-12 mb-1') : ''
           ]"
         >
+          <div v-if="selectMode && !selectionPanelOpen" class="absolute top-13 right-4 z-20 flex items-center gap-1 rounded-box border border-base-content/10 bg-base-200/80 backdrop-blur-md px-2 py-1 shadow-sm"
+            :class="{ 'pointer-events-none': uiStore.inputStack.length > 0 }"
+            @pointerdown.stop @click.stop
+          >
+            <span class="px-1 text-xs tabular-nums" aria-live="polite">
+              {{ selectedCount > 0 ? $t('toolbar.filter.select_count', { count: selectedCount.toLocaleString() }) : $t('toolbar.filter.select_files') }}
+            </span>
+            <button class="btn btn-ghost btn-xs btn-square"
+              :aria-label="$t('toolbar.filter.show_selection_panel')"
+              :title="$t('toolbar.filter.show_selection_panel')" @click="toggleSelectionPanel"
+            ><IconPanelMax class="size-4" /></button>
+            <button class="btn btn-ghost btn-xs btn-square" :aria-label="$t('toolbar.filter.exit_select_mode')"
+              :title="`${$t('toolbar.filter.exit_select_mode')} (Esc)`" @click="handleSelectMode(false)"
+            ><IconClose class="size-4" /></button>
+          </div>
           <div class="relative" 
             :class="{ 'flex-1': !showFilmstripLayout }"
             :style="{ 
@@ -239,6 +254,7 @@
                 @item-dblclicked="handleItemDblClicked"
                 @item-select-toggled="handleItemSelectToggled"
                 @item-action="handleItemAction"
+                @selection-context-menu="handleSelectionContextMenu"
                 @date-group-select="handleDateGroupSelect"
                 @group-select-toggled="handleGroupSelectToggled"
                 @visible-range-update="handleVisibleRangeUpdate"
@@ -465,6 +481,7 @@
             :selected-size="selectedSize"
             :query-source="currentQuerySource"
             :more-actions="selectionMenuItems"
+            @collapse="selectionPanelOpen = false"
             @close="handleSelectMode(false)"
             @select-all="selectAllInCurrentList"
             @select-none="selectNoneInCurrentList"
@@ -501,10 +518,10 @@
             @toggleFavorite="toggleFavorite"
             @setRating="setSelectedFileRating"
             @setCulling="setSelectedFileCullingFlag"
-            @rotate="clickRotate"
-            @quick-edit-tag="clickTag"
-            @quick-edit-collection="clickAddToCollection"
-            @quick-edit-comment="openCommentEditor"
+            @rotate="handleInfoAction(clickRotate)"
+            @quick-edit-tag="handleInfoAction(clickTag)"
+            @quick-edit-collection="handleInfoAction(clickAddToCollection)"
+            @quick-edit-comment="handleInfoAction(openCommentEditor)"
             @navigate-folder="handleInfoNavigateFolder"
             @navigate-metadata="handleNavigateMetadata"
             @navigate-person="handleNavigatePerson"
@@ -828,6 +845,7 @@ import {
   IconFilmstrip,
   IconMapDefault,
   IconSelection,
+  IconClose,
   IconInformation,
   IconSearch,
   IconPhotoSearch,
@@ -857,6 +875,7 @@ import {
   IconSortingDesc,
   IconSortingShuffle,
   IconFilter,
+  IconPanelMax,
 } from '@/common/icons';
 
 const thumbnailPlaceholder = new URL('@/assets/images/image-file.png', import.meta.url).href;
@@ -1005,6 +1024,8 @@ let hasRestoredInitialSelection = false;
 
 // mutil select mode
 const selectMode = ref(false);
+const selectionPanelOpen = ref(false);
+watch(selectMode, (active) => { if (!active) selectionPanelOpen.value = false; }, { flush: 'sync' });
 const selectedCount = ref(0);
 const selectedSize = ref(0);  // selected files size
 const selectionChunkSize = computed(() => Number(config.main?.selectionChunkSize) || 200);
@@ -1221,6 +1242,24 @@ const selectionMenuItems = useFileMenuItems(
 
 const moreActionMenuRef = ref<InstanceType<typeof ContextMenu> | null>(null);
 const moreActionMenuItems = ref<any[]>([]);
+
+function handleSelectionContextMenu(index: number, event: MouseEvent) {
+  if (!selectMode.value || uiStore.inputStack.length > 0) return;
+  const openMenu = () => {
+    if (!selectMode.value) return;
+    const file = fileList.value[index];
+    if (!isRealFileItem(file)) return;
+    if (!selectedFileIds.has(Number(file.id))) {
+      selectNoneInCurrentList();
+      setItemSelected(index, true);
+    }
+    selectedItemIndex.value = index;
+    moreActionMenuItems.value = selectionMenuItems.value;
+    void nextTick(() => moreActionMenuRef.value?.open?.(event.clientX, event.clientY));
+  };
+  if (index === selectedItemIndex.value) openMenu();
+  else checkUnsavedChanges(openMenu);
+}
 // Opens a More-actions submenu parent's children (e.g. "Open in external
 // app...") at the clicked toolbar button, reusing ContextMenu's submenu
 // rendering and the same multi-select menu actions.
@@ -2108,33 +2147,34 @@ const errorMessage = ref('');
 const showUnsavedChangesMsgbox = ref(false);
 const pendingAction = ref<(() => void) | null>(null);
 const fileInfoRef = ref<any>(null);
-const isDedupPanelOpen = computed(() => config.rightPanel.show && config.rightPanel.mode === 'dedup');
-const isInfoPanelOpen = computed(() => config.rightPanel.show && config.rightPanel.mode === 'info');
+const isDedupPanelOpen = computed(() => !selectionPanelOpen.value && config.rightPanel.show && config.rightPanel.mode === 'dedup');
+const isInfoPanelOpen = computed(() => !selectionPanelOpen.value && config.rightPanel.show && config.rightPanel.mode === 'info');
 const rightPanelContent = computed<'selection' | 'dedup' | 'info' | null>(() => {
-  if (selectMode.value) return 'selection';
+  if (selectMode.value && selectionPanelOpen.value) return 'selection';
   if (!config.rightPanel.show) return null;
   return config.rightPanel.mode === 'dedup' ? 'dedup' : 'info';
 });
 const RIGHT_PANEL_MIN_WIDTH = 160; // Keep aligned with left panel minimum width.
 const RIGHT_PANEL_ANIMATION_MS = 200;
 const activeRightPanelWidth = computed(() => Number(config.rightPanel.width || 360));
-const shouldShowRightPanel = computed(() => config.rightPanel.show || selectMode.value);
+const shouldShowRightPanel = computed(() => config.rightPanel.show || (selectMode.value && selectionPanelOpen.value));
 const rightPanelMounted = ref(shouldShowRightPanel.value);
 const rightPanelVisualVisible = ref(shouldShowRightPanel.value);
 const rightPanelLayoutVisible = ref(shouldShowRightPanel.value);
 let rightPanelAnimationTimer: ReturnType<typeof setTimeout> | null = null;
 let rightPanelAnimationVersion = 0;
 
-async function refreshCenteredGridLayout() {
+async function refreshGridLayoutPreservingScroll() {
+  const scrollTop = gridViewRef.value?.getScrollTop();
   gridViewRef.value?.refreshLayout?.();
   await nextTick();
-  gridViewRef.value?.centerItem?.(selectedItemIndex.value);
+  if (scrollTop !== undefined) gridViewRef.value?.scrollToPosition?.(scrollTop);
 }
 
 async function commitRightPanelLayout(visible: boolean) {
   rightPanelLayoutVisible.value = visible;
   await nextTick();
-  await refreshCenteredGridLayout();
+  await refreshGridLayoutPreservingScroll();
 }
 
 function clearRightPanelAnimationTimer() {
@@ -2157,7 +2197,7 @@ watch(shouldShowRightPanel, async (visible) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (animationVersion === rightPanelAnimationVersion) {
-          void refreshCenteredGridLayout();
+          void refreshGridLayoutPreservingScroll();
         }
       });
     });
@@ -3939,7 +3979,6 @@ async function selectRangeFromSingleSelection(anchorIndex: number, targetIndex: 
   selectMode.value = true;
   showQuickView.value = false;
   stopSlideShow();
-  config.rightPanel.show = false;
 
   for (let i = start; i <= end; i++) {
     if (isRealFileItem(fileList.value[i])) {
@@ -4055,9 +4094,6 @@ async function handleGroupSelectToggled(groupRow: any, selected: boolean) {
     const ids = await getCachedGroupFileIds(groupId);
     if (!ids || ids.length === 0) return;
 
-    // Group selection enters multi-select directly, so close an active right panel
-    // just as the thumbnail selection path does.
-    config.rightPanel.show = false;
     selectMode.value = true;
     const idSet = new Set(ids.map(id => Number(id)).filter(id => Number.isFinite(id) && id > 0));
     const loadedById = new Map<number, number>();
@@ -4580,11 +4616,7 @@ function handleLocalKeyDown(event: KeyboardEvent) {
       return;
     }
     if (selectMode.value) {
-      if (selectedCount.value > 0) {
-        selectNoneInCurrentList();
-      } else {
-        handleSelectMode(false);
-      }
+      handleSelectMode(false);
       event.preventDefault();
       return;
     }
@@ -9816,9 +9848,29 @@ const handleSelectMode = (value: any) => {
   } else {
     showQuickView.value = false;
     stopSlideShow();
-    config.rightPanel.show = false;
   }
 };
+
+function toggleSelectMode() {
+  if (isScanStreamingMode.value || isMapVisible.value) return;
+  checkUnsavedChanges(() => {
+    handleSelectMode(!selectMode.value);
+    selectionPanelOpen.value = selectMode.value;
+  });
+}
+
+function toggleSelectionPanel() {
+  if (isScanStreamingMode.value || isMapVisible.value) return;
+  checkUnsavedChanges(() => {
+    if (!selectMode.value) handleSelectMode(true);
+    selectionPanelOpen.value = !selectionPanelOpen.value;
+  });
+}
+
+function handleInfoAction(action: () => void) {
+  if (selectMode.value) handleSelectMode(false);
+  action();
+}
 
 watch(isMapView, (active) => {
   if (!active) return;
@@ -9988,7 +10040,7 @@ const toggleInfoPanel = () => {
       config.rightPanel.show = false;
       return;
     }
-    handleSelectMode(false);
+    selectionPanelOpen.value = false;
     config.rightPanel.mode = 'info';
     config.rightPanel.show = true;
   });
@@ -10891,7 +10943,7 @@ watch([contentReady, showWelcomeContent], ([ready, welcome]) => {
 
 defineExpose({
   focusContent: activateContentPane,
-  refreshCenteredGridLayout,
+  refreshCenteredGridLayout: refreshGridLayoutPreservingScroll,
 });
 </script>
 

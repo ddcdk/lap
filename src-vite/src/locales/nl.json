@@ -435,6 +435,10 @@
     },
     "filter": {
       "select_mode": "Meervoudige selectie",
+      "select_files": "Bestanden selecteren",
+      "show_selection_panel": "Paneel voor meervoudige selectie openen",
+      "hide_selection_panel": "Paneel voor meervoudige selectie inklappen",
+      "exit_select_mode": "Meervoudige selectie beëindigen",
       "select_count": "{count} geselecteerd",
       "group_type_options": [
         "Geen",

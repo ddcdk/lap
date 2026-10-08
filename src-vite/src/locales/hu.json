@@ -435,6 +435,10 @@
     },
     "filter": {
       "select_mode": "Többszörös kijelölés",
+      "select_files": "Fájlok kijelölése",
+      "show_selection_panel": "Többszörös kijelölési panel megnyitása",
+      "hide_selection_panel": "Többszörös kijelölési panel összecsukása",
+      "exit_select_mode": "Kilépés a többszörös kijelölésből",
       "select_count": "{count} kijelölve",
       "group_type_options": [
         "Nincs",

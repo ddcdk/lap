@@ -114,6 +114,8 @@ export { default as IconList } from '@/assets/icons/list.svg';
 export { default as IconMore } from '@/assets/icons/more.svg';
 export { default as IconOk } from '@/assets/icons/ok.svg';
 export { default as IconOrder } from '@/assets/icons/order.svg';
+export { default as IconPanelMax } from '@/assets/icons/panel-max.svg';
+export { default as IconPanelMin } from '@/assets/icons/panel-min.svg';
 export { default as IconPrint } from '@/assets/icons/print.svg';
 export { default as IconRefresh } from '@/assets/icons/refresh.svg';
 export { default as IconRepeat } from '@/assets/icons/repeat.svg';

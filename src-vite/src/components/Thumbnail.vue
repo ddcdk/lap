@@ -189,8 +189,7 @@
         </label>
       </div>
 
-      <!-- context menu (non-select only; in select mode all actions live in the
-           always-visible selection panel, so no per-thumbnail menu is shown) -->
+      <!-- per-file menu; multi-select uses the shared context menu -->
       <div v-if="!selectMode" class="absolute right-0.5 top-0.5">
         <ContextMenu
           ref="contextMenuRef"
@@ -294,7 +293,8 @@ const emit = defineEmits([
     'clicked',
     'dblclicked',
     'select-toggled',
-    'action'
+    'action',
+    'selection-context-menu',
 ]);
 
 const isTransitionDisabled = ref(false);
@@ -525,9 +525,10 @@ function handleDoubleClick(event: MouseEvent) {
 function handleContextMenu(event: MouseEvent) {
   event.preventDefault();
   event.stopPropagation();
-  // Multi-select actions live in the selection panel (always visible in select
-  // mode) and are left-click only, so no context menu is shown here.
-  if (props.selectMode) return;
+  if (props.selectMode) {
+    emit('selection-context-menu', event);
+    return;
+  }
   if (!props.isSelected) {
     emit('clicked', false);
   }

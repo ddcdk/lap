@@ -435,6 +435,10 @@
     },
     "filter": {
       "select_mode": "Tryb wielokrotnego wyboru",
+      "select_files": "Wybierz pliki",
+      "show_selection_panel": "Otwórz panel wielokrotnego wyboru",
+      "hide_selection_panel": "Zwiń panel wielokrotnego wyboru",
+      "exit_select_mode": "Wyjdź z trybu wielokrotnego wyboru",
       "select_count": "Zaznaczono: {count}",
       "group_type_options": [
         "Brak",

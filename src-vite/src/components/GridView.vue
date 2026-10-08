@@ -90,6 +90,7 @@
           @dblclicked="(modifiers) => $emit('item-dblclicked', getFileIndex(item, index), modifiers)"
           @select-toggled="(shiftKey) => $emit('item-select-toggled', getFileIndex(item, index), shiftKey)"
           @action="(actionName) => $emit('item-action', { action: actionName, index: getFileIndex(item, index) })"
+          @selection-context-menu="(event) => $emit('selection-context-menu', getFileIndex(item, index), event)"
         />
         <div v-else class="w-full h-full bg-base-200/70"></div>
       </div>
@@ -188,6 +189,7 @@ const emit = defineEmits([
   'item-dblclicked',
   'item-select-toggled',
   'item-action',
+  'selection-context-menu',
   'date-group-select',
   'group-select-toggled',
   'request-scroll',
@@ -590,9 +592,6 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       // updateColumnCount(); // merged into updateLayout
       updateLayout();
-      if (props.selectedItemIndex !== -1) {
-        scrollToItem(props.selectedItemIndex);
-      }
     });
     resizeObserver.observe(containerRef.value);
     updateLayout();

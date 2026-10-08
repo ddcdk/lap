@@ -435,6 +435,10 @@
     },
     "filter": {
       "select_mode": "選択項目",
+      "select_files": "ファイルを選択",
+      "show_selection_panel": "複数選択パネルを開く",
+      "hide_selection_panel": "複数選択パネルを折りたたむ",
+      "exit_select_mode": "複数選択モードを終了",
       "select_count": "{count} 個選択中",
       "group_type_options": [
         "なし",

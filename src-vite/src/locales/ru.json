@@ -435,6 +435,10 @@
     },
     "filter": {
       "select_mode": "Выделение",
+      "select_files": "Выбрать файлы",
+      "show_selection_panel": "Открыть панель множественного выбора",
+      "hide_selection_panel": "Свернуть панель множественного выбора",
+      "exit_select_mode": "Выйти из режима множественного выбора",
       "select_count": "Выбрано: {count}",
       "group_type_options": [
         "Нет",

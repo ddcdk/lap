@@ -435,6 +435,10 @@
     },
     "filter": {
       "select_mode": "Multi-select mode",
+      "select_files": "Select files",
+      "show_selection_panel": "Open multi-select panel",
+      "hide_selection_panel": "Hide multi-select panel",
+      "exit_select_mode": "Exit multi-select",
       "select_count": "{count} selected",
       "group_type_options": [
         "None",

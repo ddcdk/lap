@@ -435,6 +435,10 @@
     },
     "filter": {
       "select_mode": "Режим множинного вибору",
+      "select_files": "Вибрати файли",
+      "show_selection_panel": "Відкрити панель множинного вибору",
+      "hide_selection_panel": "Згорнути панель множинного вибору",
+      "exit_select_mode": "Вийти з режиму множинного вибору",
       "select_count": "Вибрано: {count}",
       "group_type_options": [
         "Немає",
