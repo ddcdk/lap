@@ -39,7 +39,7 @@
           'opacity-100': isThumbnailLoaded,
         }"
         :style="imgStyle"
-        loading="lazy"
+        loading="eager"
         @load="handleThumbnailLoad"
         @error="retryThumbnail"
       />
@@ -349,7 +349,7 @@ const isThumbnailLoaded = ref(false);
 let thumbnailRetryCount = 0;
 
 watch(
-  () => [props.file?.id, props.file?.thumbnail],
+  [() => props.file?.id, () => props.file?.thumbnail],
   ([, src]) => {
     thumbnailSrc.value = String(src || '');
     isThumbnailLoaded.value = false;

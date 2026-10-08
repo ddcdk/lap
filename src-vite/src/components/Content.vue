@@ -1028,7 +1028,6 @@ type SelectionRestoreState = {
   selectedSize: number;
   viewportFileId: number;
   fallbackFileId: number;
-  refreshSizes?: boolean;
 };
 let pendingSelectionRestore: SelectionRestoreState | null = null;
 let isRestoringSelection = false;
@@ -1124,20 +1123,54 @@ function removeDeletedFilesFromImageViewerSession(fileIds: number[]) {
   return files.length;
 }
 
-const fileRefreshSelection = ref<{ ids: number[]; libraryId: string } | null>(null);
+const fileRefreshSelection = ref<{ ids: number[]; libraryId: string; requestId: number; groupSizes: Map<string, number> } | null>(null);
 function startSelectedFileRefresh() {
   if (fileRefreshSelection.value || selectedFileIds.size === 0) return;
-  fileRefreshSelection.value = { ids: Array.from(selectedFileIds), libraryId: libConfig._libraryId };
+  fileRefreshSelection.value = {
+    ids: Array.from(selectedFileIds), libraryId: libConfig._libraryId, requestId: currentContentRequestId,
+    groupSizes: new Map(Array.from(groupMetaMap, ([id, meta]) => [id, meta.size])),
+  };
 }
-async function finishSelectedFileRefresh() {
+async function finishSelectedFileRefresh(results: Array<{ file: any; size_delta: number }>) {
   const selection = fileRefreshSelection.value;
-  if (!selection || selection.libraryId !== libConfig._libraryId) return;
-  for (const id of selection.ids) clearCachedThumbnailDataUrl(id, config.settings.thumbnailSize);
+  if (!selection || selection.libraryId !== libConfig._libraryId || results.length === 0) return;
+  for (const { file } of results) clearCachedThumbnailDataUrl(file.id, config.settings.thumbnailSize);
   fileInfoRevision.value++;
-  // updateContent dispatches list queries without awaiting their completion.
-  // Restore selection from the contentReady watcher, never from a transient
-  // empty list while those queries are still loading.
-  await updateContent(true, true);
+  if (selection.requestId !== currentContentRequestId) return;
+  const scrollTop = gridViewRef.value?.getScrollTop();
+  const loadedFiles = new Map(fileList.value.filter(isRealFileItem).map(file => [Number(file.id), file]));
+  const refreshedFiles: any[] = [];
+  const groupDeltas = new Map<string, number>();
+  for (const { file: updated, size_delta } of results) {
+    totalFileSize.value += size_delta;
+    selectedSize.value += size_delta;
+    const groupId = fileIdToGroupId.get(Number(updated.id));
+    if (groupId) {
+      groupDeltas.set(groupId, (groupDeltas.get(groupId) || 0) + size_delta);
+    }
+    const file = loadedFiles.get(Number(updated.id));
+    if (!file) continue;
+    Object.assign(file, updated, { rawThumbnailStale: true });
+    refreshedFiles.push(file);
+  }
+  for (const [groupId, delta] of groupDeltas) {
+    const meta = groupMetaMap.get(groupId);
+    if (meta) meta.size = (selection.groupSizes.get(groupId) ?? meta.size) + delta;
+  }
+  for (const group of [...groupedTimelineGroups.value, ...groupedRows.value.filter(isGroupRow)]) {
+    const id = String(group.groupId || group.group_id);
+    if (groupDeltas.has(id)) group.size = groupMetaMap.get(id)?.size ?? group.size;
+  }
+  if (groupDeltas.size > 0) {
+    const sizes = { ...groupSelectedSizeMap.value };
+    for (const [id, delta] of groupDeltas) sizes[id] = Math.max(0, Number(sizes[id] || 0) + delta);
+    groupSelectedSizeMap.value = sizes;
+  }
+  syncSelectionVersions();
+  await nextTick();
+  if (selection.libraryId !== libConfig._libraryId || selection.requestId !== currentContentRequestId) return;
+  if (scrollTop !== undefined) gridViewRef.value?.scrollToPosition(scrollTop);
+  await getFileListThumb(refreshedFiles, 0, 4, true);
 }
 
 const selectionAccessFiles = ref<any[]>([]);
@@ -1247,7 +1280,6 @@ function captureSelectionForFileListRefresh() {
   const activeFileId = Number(fileList.value[selectedItemIndex.value]?.id || 0);
   pendingSelectionRestore = {
     selectedIds: new Set(selectedFileIds),
-    refreshSizes: Boolean(fileRefreshSelection.value),
     selectedSizes,
     selectedSize: selectedSize.value,
     viewportFileId: activeFileId,
@@ -1261,9 +1293,6 @@ async function restoreSelectionAfterFileListRefresh() {
   if (fileList.value.length === 0) {
     pendingSelectionRestore = null;
     resetSelectionSummary();
-    // Only metadata refresh promises to keep multi-select on an empty result.
-    // Other refresh flows must not override the current mode here.
-    if (restoreState.refreshSizes) selectMode.value = true;
     return;
   }
 
@@ -1289,20 +1318,6 @@ async function restoreSelectionAfterFileListRefresh() {
     const nextSelectedIds = new Set(
       Array.from(restoreState.selectedIds).filter(id => availableIds.has(id)),
     );
-
-    // A metadata refresh may change sizes, including files outside loaded rows.
-    if (restoreState.refreshSizes) {
-      const ids = Array.from(nextSelectedIds);
-      for (let offset = 0; offset < ids.length; offset += 200) {
-        const files = await getFilesByIds(ids.slice(offset, offset + 200));
-        if (requestId !== currentContentRequestId || pendingSelectionRestore !== restoreState) {
-          retryForNewerRefresh = true;
-          return;
-        }
-        if (!Array.isArray(files)) return;
-        for (const file of files) restoreState.selectedSizes.set(Number(file.id), Number(file.size || 0));
-      }
-    }
 
     const viewportFileId = availableIds.has(restoreState.viewportFileId)
       ? restoreState.viewportFileId
@@ -1339,7 +1354,7 @@ async function restoreSelectionAfterFileListRefresh() {
       if (isRealFileItem(file)) file.isSelected = selectedFileIds.has(Number(file.id));
     }
     selectedCount.value = selectedFileIds.size;
-    selectedSize.value = !restoreState.refreshSizes && nextSelectedIds.size === restoreState.selectedIds.size
+    selectedSize.value = nextSelectedIds.size === restoreState.selectedIds.size
       ? restoreState.selectedSize
       : Array.from(selectedFileIds).reduce(
           (total, fileId) => total + Number(restoreState.selectedSizes.get(fileId) || 0),
@@ -4114,6 +4129,7 @@ async function getCachedGroupFileIds(groupId: string) {
         : [];
   const normalized = ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0);
   groupFileIdsCache.set(groupId, normalized);
+  for (const id of normalized) fileIdToGroupId.set(id, groupId);
   return normalized;
 }
 
@@ -5859,10 +5875,9 @@ onMounted( async() => {
       if (refreshed && fileList.value.includes(file)) Object.assign(file, refreshed);
     }));
 
-    // Reload the regenerated thumbnails instead of retaining the old values
-    // that arrived with the refreshed file list.
+    // Keep the current thumbnail until its replacement is ready.
     for (const file of loadedFiles) {
-      file.thumbnail = '';
+      file.rawThumbnailStale = true;
     }
 
     // Match Refresh file info: changing filePath makes Image.vue reload the
@@ -9264,7 +9279,7 @@ function getNextVideoThumbnailRefreshPercent(file: any) {
 }
 
 const updateThumbForFile = async (file: any) => {
-  file.thumbnail = '';
+  file.rawThumbnailStale = true;
   clearCachedThumbnailDataUrl(file.id, config.settings.thumbnailSize);
   const thumb = await getFileThumb(
     file.id,

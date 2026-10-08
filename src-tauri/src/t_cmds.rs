@@ -2866,9 +2866,15 @@ pub fn update_file_info(file_id: i64, file_path: &str) -> Result<Option<AFile>, 
         .map_err(|e| format!("Error while updating file info: {}", e))
 }
 
+#[derive(serde::Serialize)]
+pub struct FileRefreshResult {
+    file: AFile,
+    size_delta: i64,
+}
+
 /// Force a selected file refresh without accepting a stale frontend file path.
 #[tauri::command]
-pub async fn refresh_selected_file_info(library_id: String, file_id: i64) -> Result<Option<AFile>, String> {
+pub async fn refresh_selected_file_info(library_id: String, file_id: i64) -> Result<Option<FileRefreshResult>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = FILE_REFRESH_LIBRARY_LOCK.read().map_err(|e| e.to_string())?;
         if t_config::current_library_id()? != library_id {
@@ -2887,7 +2893,10 @@ pub async fn refresh_selected_file_info(library_id: String, file_id: i64) -> Res
                 AFile::update_column(file_id, "embeds", &Option::<Vec<u8>>::None)?;
             }
         }
-        AFile::get_file_info(file_id)
+        Ok(AFile::get_file_info(file_id)?.map(|file| FileRefreshResult {
+            size_delta: file.size - old.size,
+            file,
+        }))
     }).await.map_err(|e| format!("File refresh task failed: {e}"))?
 }
 

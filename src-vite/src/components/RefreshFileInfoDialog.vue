@@ -1,5 +1,5 @@
 <template>
-  <ModalDialog v-if="visible" :title="$t('menu.file.refresh_file_info')" :width="440" @cancel="closeOrCancel">
+  <ModalDialog :title="$t('menu.file.refresh_file_info')" :width="440" @cancel="closeOrCancel">
     <section class="rounded-box p-2 space-y-2 bg-base-300/30 border border-base-content/5 shadow-sm">
       <div class="font-bold uppercase text-[10px] tracking-widest text-base-content/30">{{ $t('msgbox.file_refresh.status') }}</div>
       <div class="space-y-2 px-1 text-xs" role="status" aria-live="polite">
@@ -29,10 +29,10 @@ import { libConfig } from '@/common/config';
 import { useUIStore } from '@/stores/uiStore';
 import ModalDialog from '@/components/ModalDialog.vue';
 
-const props = defineProps<{ fileIds: number[]; libraryId: string; finishRefresh: () => Promise<void> }>();
+type FileRefreshResult = { file: any; size_delta: number };
+const props = defineProps<{ fileIds: number[]; libraryId: string; finishRefresh: (results: FileRefreshResult[]) => Promise<void> }>();
 const emit = defineEmits(['close']);
 const uiStore = useUIStore();
-const visible = ref(true);
 const running = ref(true);
 const cancelled = ref(false);
 const processed = ref(0);
@@ -43,9 +43,6 @@ let disposed = false;
 function closeOrCancel() {
   if (running.value) {
     cancelled.value = true;
-    visible.value = false;
-    uiStore.removeInputHandler('RefreshFileInfoDialog');
-    // Keep the task mounted until the in-flight file and list refresh finish.
   } else emit('close');
 }
 function handleKeyDown(event: KeyboardEvent) {
@@ -57,6 +54,7 @@ function handleKeyDown(event: KeyboardEvent) {
 }
 watch(() => libConfig._libraryId, () => { cancelled.value = true; });
 onMounted(async () => {
+  const results: FileRefreshResult[] = [];
   uiStore.pushInputHandler('RefreshFileInfoDialog');
   window.addEventListener('keydown', handleKeyDown);
   // Sequential background commands bound memory and permit cancellation between
@@ -68,8 +66,11 @@ onMounted(async () => {
         break;
       }
       try {
-        const result = await invoke('refresh_selected_file_info', { libraryId: props.libraryId, fileId });
-        if (result) succeeded.value++;
+        const result = await invoke<FileRefreshResult | null>('refresh_selected_file_info', { libraryId: props.libraryId, fileId });
+        if (result) {
+          results.push(result);
+          succeeded.value++;
+        }
         else failed.value++;
       } catch (error) {
         console.error('Failed to refresh selected file:', fileId, error);
@@ -79,10 +80,10 @@ onMounted(async () => {
     }
   } finally {
     try {
-      if (!disposed && libConfig._libraryId === props.libraryId) await props.finishRefresh();
+      if (!disposed && libConfig._libraryId === props.libraryId) await props.finishRefresh(results);
     } finally {
       running.value = false;
-      if (!disposed && !visible.value) emit('close');
+      if (!disposed && cancelled.value) emit('close');
     }
   }
 });
