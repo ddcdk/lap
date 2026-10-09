@@ -8,14 +8,8 @@
       </div>
       <div class="flex items-center gap-1">
         <TButton
-          :icon="IconPanelMin"
-          :tooltip="$t('toolbar.filter.hide_selection_panel')"
-          :buttonSize="'small'"
-          @click.stop="$emit('collapse')"
-        />
-        <TButton
           :icon="IconClose"
-          :tooltip="$t('toolbar.filter.exit_select_mode')"
+          :tooltip="$t('msgbox.close')"
           :buttonSize="'small'"
           @click.stop="$emit('close')"
         />
@@ -220,7 +214,6 @@ import {
   IconChecked,
   IconUnChecked,
   IconClose,
-  IconPanelMin,
   IconComment,
   IconFileArrowRight,
   IconRotate,
@@ -263,7 +256,6 @@ const props = defineProps({
 
 const emit = defineEmits([
   'close',
-  'collapse',
   'selectAll',
   'selectNone',
   'selectInvert',

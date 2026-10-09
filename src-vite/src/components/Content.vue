@@ -149,8 +149,8 @@
           <!-- toggle select mode -->
           <TButton
             :icon="IconSelection"
-            :tooltip="$t(selectMode ? 'toolbar.filter.exit_select_mode' : 'toolbar.filter.select_mode')"
-            :selected="selectMode"
+            :tooltip="$t(selectionPanelOpen ? 'toolbar.filter.exit_select_mode' : 'toolbar.filter.select_mode')"
+            :selected="selectionPanelOpen"
             :disabled="isScanStreamingMode || isMapVisible"
             @click="toggleSelectMode"
           />
@@ -207,7 +207,7 @@
             showFilmstripLayout ? (config.settings.showStatusBar ? 'mt-12 mb-8' : 'mt-12 mb-1') : ''
           ]"
         >
-          <div v-if="selectMode && !selectionPanelOpen" class="absolute top-13 right-4 z-20 flex items-center gap-1 rounded-box border border-base-content/10 bg-base-200/80 backdrop-blur-md px-2 py-1 shadow-sm"
+          <div v-if="selectMode && !selectionPanelOpen" class="absolute top-14 right-7 z-20 flex items-center gap-1 rounded-box border border-base-content/10 bg-base-200/80 backdrop-blur-md px-2 py-1 shadow-sm"
             :class="{ 'pointer-events-none': uiStore.inputStack.length > 0 }"
             @pointerdown.stop @click.stop
           >
@@ -216,7 +216,7 @@
             </span>
             <button class="btn btn-ghost btn-xs btn-square"
               :aria-label="$t('toolbar.filter.show_selection_panel')"
-              :title="$t('toolbar.filter.show_selection_panel')" @click="toggleSelectionPanel"
+              :title="$t('toolbar.filter.show_selection_panel')" @click="openSelectionPanel"
             ><IconPanelMax class="size-4" /></button>
             <button class="btn btn-ghost btn-xs btn-square" :aria-label="$t('toolbar.filter.exit_select_mode')"
               :title="`${$t('toolbar.filter.exit_select_mode')} (Esc)`" @click="handleSelectMode(false)"
@@ -453,7 +453,7 @@
           :style="{ width: activeRightPanelWidth + 'px', top: '3rem', bottom: config.settings.showStatusBar ? '2rem' : '0.25rem' }"
         >
           <DedupPane
-            v-if="rightPanelContent === 'dedup'"
+            v-if="renderedRightPanelContent === 'dedup'"
             ref="dedupPaneRef"
             :selected-file-id="fileList[selectedItemIndex]?.id"
             :dedup-scan-key="dedupScanKey"
@@ -473,7 +473,7 @@
             @dedup-status-updated="dedupStatuses = $event"
           />
           <SelectionPanel
-            v-else-if="rightPanelContent === 'selection'"
+            v-else-if="renderedRightPanelContent === 'selection'"
             :file-count="fileList.length"
             :selected-files="selectionPreviewFiles"
             :selected-count="selectedCount"
@@ -481,8 +481,7 @@
             :selected-size="selectedSize"
             :query-source="currentQuerySource"
             :more-actions="selectionMenuItems"
-            @collapse="selectionPanelOpen = false"
-            @close="handleSelectMode(false)"
+            @close="handleSelectMode(false); config.rightPanel.show = false"
             @select-all="selectAllInCurrentList"
             @select-none="selectNoneInCurrentList"
             @select-invert="invertSelectionInCurrentList"
@@ -504,7 +503,7 @@
             @more-action-menu="handleMoreActionMenu"
           />
           <FileInfo
-            v-else-if="rightPanelContent === 'info'"
+            v-else-if="renderedRightPanelContent === 'info'"
             ref="fileInfoRef"
             :fileInfo="fileList[selectedItemIndex]"
             :navigator-viewport="infoNavigatorViewport"
@@ -2153,6 +2152,10 @@ const rightPanelContent = computed<'selection' | 'dedup' | 'info' | null>(() => 
   if (selectMode.value && selectionPanelOpen.value) return 'selection';
   if (!config.rightPanel.show) return null;
   return config.rightPanel.mode === 'dedup' ? 'dedup' : 'info';
+});
+const renderedRightPanelContent = ref(rightPanelContent.value);
+watch(rightPanelContent, (content) => {
+  if (content) renderedRightPanelContent.value = content;
 });
 const RIGHT_PANEL_MIN_WIDTH = 160; // Keep aligned with left panel minimum width.
 const RIGHT_PANEL_ANIMATION_MS = 200;
@@ -9854,16 +9857,18 @@ const handleSelectMode = (value: any) => {
 function toggleSelectMode() {
   if (isScanStreamingMode.value || isMapVisible.value) return;
   checkUnsavedChanges(() => {
-    handleSelectMode(!selectMode.value);
-    selectionPanelOpen.value = selectMode.value;
+    const open = !selectionPanelOpen.value;
+    if (selectionPanelOpen.value) config.rightPanel.show = false;
+    handleSelectMode(open);
+    selectionPanelOpen.value = open;
   });
 }
 
-function toggleSelectionPanel() {
+function openSelectionPanel() {
   if (isScanStreamingMode.value || isMapVisible.value) return;
   checkUnsavedChanges(() => {
     if (!selectMode.value) handleSelectMode(true);
-    selectionPanelOpen.value = !selectionPanelOpen.value;
+    selectionPanelOpen.value = true;
   });
 }
 
