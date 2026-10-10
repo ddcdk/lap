@@ -2870,6 +2870,8 @@ pub fn update_file_info(file_id: i64, file_path: &str) -> Result<Option<AFile>, 
 pub struct FileRefreshResult {
     file: AFile,
     size_delta: i64,
+    /// True when the file was left unread because it is an unchanged cloud-only file.
+    skipped: bool,
 }
 
 /// Force a selected file refresh without accepting a stale frontend file path.
@@ -2889,7 +2891,7 @@ pub async fn refresh_selected_file_info(library_id: String, file_id: i64) -> Res
                 && m.len() as i64 == old.size
                 && t_utils::systemtime_to_timestamp(m.modified().ok()) == old.modified_at
         }) {
-            return Ok(Some(FileRefreshResult { file: old, size_delta: 0 }));
+            return Ok(Some(FileRefreshResult { file: old, size_delta: 0, skipped: true }));
         }
         let updated = AFile::update_file_info(file_id, path, chrono::Utc::now().timestamp_millis())?;
         if let Some(ref file) = updated {
@@ -2905,6 +2907,7 @@ pub async fn refresh_selected_file_info(library_id: String, file_id: i64) -> Res
         Ok(AFile::get_file_info(file_id)?.map(|file| FileRefreshResult {
             size_delta: file.size - old.size,
             file,
+            skipped: false,
         }))
     }).await.map_err(|e| format!("File refresh task failed: {e}"))?
 }

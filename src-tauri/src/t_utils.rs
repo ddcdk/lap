@@ -3478,7 +3478,8 @@ struct ThumbnailReadyPayload {
 }
 
 pub fn file_accessible(path: &str) -> bool {
-    std::path::Path::new(path).is_file() && std::fs::File::open(path).is_ok()
+    // Opening a cloud-only file downloads it; its metadata is enough here.
+    std::fs::metadata(path).is_ok_and(|m| m.is_file() && (is_cloud_only(&m) || std::fs::File::open(path).is_ok()))
 }
 
 pub fn album_accessible(album_id: i64) -> bool {
@@ -4538,6 +4539,8 @@ mod cloud_only_tests {
     fn cloud_only_sample_is_detected() {
         let Ok(path) = std::env::var("LAP_CLOUD_ONLY_FILE") else { return };
         assert!(is_cloud_only(&fs::metadata(&path).unwrap()));
+        assert!(file_accessible(&path));
+        assert!(is_cloud_only(&fs::metadata(&path).unwrap()), "the accessibility check downloaded the file");
     }
 }
 
