@@ -717,7 +717,7 @@ const settingsTabs = [
   { id: SETTINGS_TAB.ABOUT, label: 'settings.about.title' },
 ];
 const rawPreviewFields = [
-  { key: 'rawPreviewSource', hint: '', options: ['embedded', 'rendered'] },
+  { key: 'rawPreviewSource', hint: 'preview_source_hint', options: ['embedded', 'rendered'] },
   { key: 'rawRenderBrightness', hint: 'brightness_hint', options: ['original', 'brightened'] },
 ];
 

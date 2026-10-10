@@ -1850,62 +1850,157 @@ pub async fn get_file_image_bytes_cached(
     Ok(image_data)
 }
 
-fn get_raw_preview_with_source(path: &str, options: RawDisplayOptions) -> Result<RawPreviewResult, String> {
-    if options.embedded() {
-        if let Ok(Some(data)) = t_libraw::get_embedded_raw_preview_image(path) {
-            return Ok((data, "embedded", false));
+fn get_embedded_preview(path: &str) -> Option<Vec<u8>> {
+    if let Ok(Some(data)) = t_libraw::get_embedded_raw_preview_image(path) {
+        return Some(data);
+    }
+    // Some cameras expose previews that LibRaw cannot extract. Preserve the
+    // existing JPEG extraction fallback, with accurate source metadata.
+    if let Ok(Some(preview)) = select_embedded_jpeg_for_preview(path) {
+        let (raw_width, raw_height, _) = t_libraw::get_raw_dimensions_with_flip(path).unwrap_or((1024, 512, 0));
+        if t_libraw::embedded_preview_is_large_enough(preview.width, preview.height, raw_width, raw_height)
+            && let Ok(image) = image::load_from_memory(&preview.data) {
+            let image = apply_orientation(image, preview.orientation);
+            let data = crate::t_jpeg::encode_rgb8(&image.to_rgb8(), 85).ok()?;
+            return Some(data);
         }
-        // Some cameras expose previews that LibRaw cannot extract. Preserve the
-        // existing JPEG extraction fallback, with accurate source metadata.
-        if let Ok(Some(preview)) = select_embedded_jpeg_for_preview(path) {
-            let (raw_width, raw_height, _) = t_libraw::get_raw_dimensions_with_flip(path).unwrap_or((1024, 512, 0));
-            if t_libraw::embedded_preview_is_large_enough(preview.width, preview.height, raw_width, raw_height)
-                && let Ok(image) = image::load_from_memory(&preview.data) {
-                let image = apply_orientation(image, preview.orientation);
-                let data = crate::t_jpeg::encode_rgb8(&image.to_rgb8(), 85).map_err(|e| e.to_string())?;
-                return Ok((data, "embedded", false));
-            }
+    }
+    None
+}
+
+fn get_raw_preview_with_source(path: &str, options: RawDisplayOptions, full_size: bool) -> Result<RawPreviewResult, String> {
+    if options.embedded() {
+        if let Some(data) = get_embedded_preview(path) {
+            return Ok((data, "embedded", false));
         }
     }
     let rendered = RawDisplayOptions { mode: crate::t_raw_display::RawPreviewMode::Rendered, ..options };
-    match t_libraw::get_raw_preview_with_source(path, rendered) {
+    match t_libraw::get_raw_preview_with_size(path, rendered, full_size) {
         Ok((data, source, _)) => Ok((data, source, options.embedded())),
-        Err(error) => match get_raw_preview_fallback_image(path)? {
-            Some(data) => Ok((data, "", options.embedded())),
-            None => Err(error),
-        },
+        Err(error) if !options.embedded() => get_embedded_preview(path)
+            .map(|data| (data, "embedded", false)).ok_or(error),
+        Err(error) => Err(error),
     }
 }
 
 // Keep decoder work off the async runtime and bound concurrent full RAW previews.
 type RawPreviewResult = (Vec<u8>, &'static str, bool);
-static RAW_PREVIEW_CACHE: Lazy<Mutex<VecDeque<(String, (u64, u128), RawDisplayOptions, RawPreviewResult)>>> = Lazy::new(|| Mutex::new(VecDeque::new()));
-static RAW_PREVIEW_PERMITS: Lazy<std::sync::Arc<tokio::sync::Semaphore>> = Lazy::new(|| std::sync::Arc::new(tokio::sync::Semaphore::new(2)));
+static RAW_PREVIEW_CACHE: Lazy<Mutex<VecDeque<(String, (u64, u128), RawDisplayOptions, RawPreviewResult, bool)>>> = Lazy::new(|| Mutex::new(VecDeque::new()));
+static RAW_PREVIEW_PERMITS: Lazy<Vec<std::sync::Arc<tokio::sync::Semaphore>>> = Lazy::new(|| (0..2).map(|_| std::sync::Arc::new(tokio::sync::Semaphore::new(1))).collect());
+static RAW_PREVIEW_LOCKS: Lazy<Vec<tokio::sync::Mutex<()>>> = Lazy::new(|| (0..64).map(|_| tokio::sync::Mutex::new(())).collect());
+static RAW_PREVIEW_REQUESTS: Lazy<Mutex<HashMap<String, std::sync::Weak<std::sync::atomic::AtomicBool>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
-pub async fn get_raw_preview_cached(path: &str, options: RawDisplayOptions) -> Result<RawPreviewResult, String> {
-    let permit = RAW_PREVIEW_PERMITS.clone().acquire_owned().await.map_err(|e| e.to_string())?;
-    let path = path.to_string();
-    tauri::async_runtime::spawn_blocking(move || {
-        let _permit = permit;
-        let signature = get_file_signature(&path)?;
-        if let Ok(cache) = RAW_PREVIEW_CACHE.lock() {
-            if let Some(entry) = cache.iter().find(|entry| entry.0 == path && entry.1 == signature && entry.2 == options) {
-                return Ok(entry.3.clone());
+pub fn register_raw_preview_request(viewer: &str) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+    let active = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    if let Ok(mut requests) = RAW_PREVIEW_REQUESTS.lock() {
+        requests.retain(|_, request| request.strong_count() > 0);
+        if let Some(previous) = requests.insert(viewer.to_string(), std::sync::Arc::downgrade(&active)).and_then(|request| request.upgrade()) {
+            previous.store(false, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+    active
+}
+
+fn raw_preview_disk_path(path: &str, signature: (u64, u128), options: RawDisplayOptions, full_size: bool) -> Result<std::path::PathBuf, String> {
+    let key = blake3::hash(format!("raw-preview-v6:{path}:{signature:?}:{options:?}:{full_size}").as_bytes());
+    Ok(crate::t_config::get_app_cache_dir()?.join("raw-previews").join(key.to_hex().as_str()))
+}
+
+fn read_raw_preview_disk(path: &std::path::Path) -> Option<RawPreviewResult> {
+    let bytes = fs::read(path).ok()?;
+    let source = match *bytes.first()? { 1 => "embedded", 2 => "rendered", 3 => "brightened", _ => return None };
+    let unavailable = *bytes.get(1)? != 0;
+    let data = bytes.get(2..)?;
+    if !data.starts_with(&[0xff, 0xd8]) || !data.ends_with(&[0xff, 0xd9]) { return None; }
+    Some((data.to_vec(), source, unavailable))
+}
+
+fn write_raw_preview_disk(path: &std::path::Path, result: &RawPreviewResult) {
+    let Some(dir) = path.parent() else { return; };
+    if fs::create_dir_all(dir).is_err() { return; }
+    let mut bytes = vec![match result.1 { "embedded" => 1, "brightened" => 3, _ => 2 }, result.2 as u8];
+    bytes.extend_from_slice(&result.0);
+    let temp = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+    if fs::write(&temp, bytes).is_ok() { let _ = fs::rename(&temp, path); }
+    let _ = fs::remove_file(&temp);
+    let mut entries: Vec<_> = fs::read_dir(dir).into_iter().flatten().flatten().filter_map(|entry| {
+        if entry.path().extension().is_some() { return None; }
+        let meta = entry.metadata().ok()?;
+        Some((entry.path(), meta.len(), meta.modified().ok()?))
+    }).collect();
+    let mut size: u64 = entries.iter().map(|entry| entry.1).sum();
+    entries.sort_by_key(|entry| entry.2);
+    for (file, len, _) in entries {
+        if size <= 512 * 1024 * 1024 { break; }
+        if fs::remove_file(file).is_ok() { size = size.saturating_sub(len); }
+    }
+}
+
+pub async fn get_raw_preview_cached(path: &str, options: RawDisplayOptions, full_size: bool, active: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) -> Result<RawPreviewResult, String> {
+    let signature = get_file_signature(path)?;
+    let disk = raw_preview_disk_path(path, signature, options, full_size).ok();
+    let hash = blake3::hash(format!("{path}:{options:?}:{full_size}").as_bytes());
+    let _request = RAW_PREVIEW_LOCKS[hash.as_bytes()[0] as usize % 64].lock().await;
+    let check_active = || {
+        if active.as_ref().is_some_and(|active| !active.load(std::sync::atomic::Ordering::Relaxed)) {
+            Err("RAW preview superseded".to_string())
+        } else { Ok(()) }
+    };
+    check_active()?;
+    if let Ok(cache) = RAW_PREVIEW_CACHE.lock() {
+        if let Some(entry) = cache.iter().find(|entry| entry.0 == path && entry.1 == signature && entry.2 == options && entry.4 == full_size) {
+            return Ok(entry.3.clone());
+        }
+    }
+    let cached = if let Some(disk) = disk.clone() {
+        tauri::async_runtime::spawn_blocking(move || read_raw_preview_disk(&disk)).await.map_err(|e| e.to_string())?
+    } else { None };
+    let result = if let Some(cached) = cached { cached } else {
+        let permit = RAW_PREVIEW_PERMITS[full_size as usize].clone().acquire_owned().await.map_err(|e| e.to_string())?;
+        check_active()?;
+        let path = path.to_string();
+        tauri::async_runtime::spawn_blocking(move || {
+            let _permit = permit;
+            let result = get_raw_preview_with_source(&path, options, full_size)?;
+            if options.embedded() || result.1 != "embedded" {
+                if let Some(disk) = disk { write_raw_preview_disk(&disk, &result); }
             }
-        }
-        let result = get_raw_preview_with_source(&path, options)?;
-        if let Ok(mut cache) = RAW_PREVIEW_CACHE.lock() {
-            cache.retain(|entry| entry.0 != path || (entry.1 == signature && entry.2 != options));
-            cache.push_back((path, signature, options, result.clone()));
-            while cache.len() > 4 { cache.pop_front(); }
-        }
-        Ok(result)
-    }).await.map_err(|e| e.to_string())?
+            Ok::<_, String>(result)
+        }).await.map_err(|e| e.to_string())??
+    };
+    if !options.embedded() && result.1 == "embedded" { return Ok(result); }
+    if let Ok(mut cache) = RAW_PREVIEW_CACHE.lock() {
+        cache.retain(|entry| entry.0 != path || (entry.1 == signature && (entry.2 != options || entry.4 != full_size)));
+        cache.push_back((path.to_string(), signature, options, result.clone(), full_size));
+        while cache.len() > 8 { cache.pop_front(); }
+    }
+    Ok(result)
 }
 
 #[cfg(test)]
 mod offline_preview_tests {
     use super::*;
+
+    #[test]
+    fn raw_disk_cache_preserves_source_and_rejects_incomplete_data() {
+        let viewer = uuid::Uuid::new_v4().to_string();
+        let previous = register_raw_preview_request(&viewer);
+        let current = register_raw_preview_request(&viewer);
+        assert!(!previous.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(current.load(std::sync::atomic::Ordering::Relaxed));
+        let dir = std::env::temp_dir().join(format!("lap-raw-cache-{}", uuid::Uuid::new_v4()));
+        let path = dir.join("preview");
+        let pixels = image::RgbImage::new(2, 2);
+        let jpeg = crate::t_jpeg::encode_rgb8(&pixels, 85).unwrap();
+        for source in ["embedded", "rendered", "brightened"] {
+            let result = (jpeg.clone(), source, source != "embedded");
+            write_raw_preview_disk(&path, &result);
+            assert_eq!(read_raw_preview_disk(&path), Some(result));
+        }
+        fs::write(&path, [2, 0, 0xff, 0xd8]).unwrap();
+        assert!(read_raw_preview_disk(&path).is_none());
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn offline_preview_reads_existing_pixels_without_source_metadata_or_regeneration() {
@@ -1933,6 +2028,7 @@ mod offline_preview_tests {
             (3, 123),
             options,
             (vec![4, 5, 6], "embedded", false),
+            false,
         ));
         assert_eq!(
             get_cached_preview_bytes(&path, options),

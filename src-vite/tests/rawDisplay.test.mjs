@@ -81,12 +81,12 @@ test('JPEG round trips restore the selected RAW mode before cycling again', () =
   }
 });
 
-const loaderSource = ts.transpile(imageSource.slice(imageSource.indexOf('async function loadRawImage'), imageSource.indexOf('let resizeObserver')), { target: ts.ScriptTarget.ES2022 });
+const loaderSource = ts.transpile(imageSource.slice(imageSource.indexOf('async function loadRawImage'), imageSource.indexOf('watch(() => [scale.value')), { target: ts.ScriptTarget.ES2022 });
 
 test('a superseded RAW response cannot replace the latest source or leak a blob URL', async () => {
   const requests = [];
   const urls = new Set();
-  const load = new Function('fetch', 'props', 'getPreviewUrl', 'appendRawDisplayParams', 'requestedRawOptions', 'Image', 'rawObjectUrls', `let rawAbortController = null; ${loaderSource}; return loadRawImage;`)(
+  const load = new Function('fetch', 'props', 'getPreviewUrl', 'appendRawDisplayParams', 'requestedRawOptions', 'Image', 'rawObjectUrls', `let rawAbortController = null; const rawViewerId = 'test-viewer'; ${loaderSource}; return loadRawImage;`)(
     (_url, options) => new Promise(resolve => requests.push({ resolve, signal: options.signal })),
     { fileId: 42, fileVersion: 1 }, () => 'http://preview.localhost/test/42', appendRawDisplayParams,
     { value: { mode: 'rendered', autoBright: true, preferPair: false } },

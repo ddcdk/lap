@@ -219,6 +219,9 @@ pub fn register_protocols(builder: Builder<Wry>) -> Builder<Wry> {
                 .any(|param| param == "cachedOnly=true");
             let for_editing = request.uri().query().unwrap_or_default().split('&')
                 .any(|param| param == "forEditing=true");
+            let raw_request = request.uri().query().unwrap_or_default().split('&')
+                .find_map(|param| param.strip_prefix("rawViewerId="))
+                .map(t_image::register_raw_preview_request);
 
             if file_id <= 0 {
                 responder.respond(text_response(
@@ -300,7 +303,8 @@ pub fn register_protocols(builder: Builder<Wry>) -> Builder<Wry> {
                     }
                 }
                 if is_raw {
-                    let response = match t_image::get_raw_preview_cached(&file_path, options).await {
+                    let full_size = request.uri().query().unwrap_or_default().split('&').any(|param| param == "rawFullSize=true");
+                    let response = match t_image::get_raw_preview_cached(&file_path, options, full_size, raw_request).await {
                         Ok((data, source, unavailable)) => raw_preview_response(data, source, unavailable, pair_label),
                         Err(_) => text_response(http::StatusCode::NOT_FOUND, "RAW preview not found"),
                     };

@@ -429,6 +429,11 @@ const rawSelectionVersion = ref(0);
 const resolvedRawPairLabel = ref<string | null>(null);
 const rawPairLabel = computed(() => resolvedRawPairLabel.value ?? (props.rawPairPath ? /\.(heic|heif|hif)$/i.test(props.rawPairPath) ? 'HEIC' : 'JPEG' : ''));
 const rawEmbeddedUnavailable = ref(false);
+const rawFullSize = ref(false);
+let rawUpgradeFailed = false;
+let rawUpgradeRetryAt = 0;
+const rawViewerId = crypto.randomUUID();
+let rawUpgradeTimer: ReturnType<typeof setTimeout> | null = null;
 const requestedRawOptions = computed(() => rawOverride.value || getRawDisplayOptions());
 // The RAW's own preview mode, independent of whether the paired JPEG/HEIC is
 // the source currently on screen — the RAW button always shows this mode.
@@ -482,16 +487,24 @@ watch(() => props.filePath, () => {
   resolvedRawPairLabel.value = null;
   rawEmbeddedUnavailable.value = false;
   rawRequestPending.value = false;
+  rawFullSize.value = false;
+}, { flush: 'sync' });
+watch([rawDisplayKey, rawSelectionVersion, () => props.fileVersion, () => props.filePath], () => {
+  rawFullSize.value = false;
+  rawUpgradeFailed = false;
+  rawUpgradeRetryAt = 0;
 }, { flush: 'sync' });
 watch(rawDisplayKey, () => { rawOverride.value = null; }, { flush: 'sync' });
 
-async function loadRawImage(filePath: string): Promise<LoadedImage> {
+async function loadRawImage(filePath: string, fullSize = false): Promise<LoadedImage> {
   rawAbortController?.abort();
   const controller = new AbortController();
   rawAbortController = controller;
   const url = new URL(getPreviewUrl(props.fileId, filePath, false, props.fileVersion));
   const options = requestedRawOptions.value;
   appendRawDisplayParams(url.searchParams, options);
+  url.searchParams.set('rawViewerId', rawViewerId);
+  if (fullSize) url.searchParams.set('rawFullSize', 'true');
   const response = await fetch(url.toString(), { signal: controller.signal });
   if (!response.ok) throw new Error('RAW preview failed');
   const blob = await response.blob();
@@ -514,6 +527,72 @@ async function loadRawImage(filePath: string): Promise<LoadedImage> {
     throw error;
   }
 }
+
+watch(() => [scale.value[activeImage.value], rawSource.value, rawRequestPending.value, containerSize.value.width, containerSize.value.height], (current, previous) => {
+  if (rawUpgradeTimer) clearTimeout(rawUpgradeTimer);
+  if (rawUpgradeRetryAt && Date.now() >= rawUpgradeRetryAt
+    && [0, 3, 4].some(index => current[index] !== previous[index])) {
+    rawUpgradeFailed = false;
+    rawUpgradeRetryAt = 0;
+  }
+  const index = activeImage.value;
+  const natural = imageNaturalSize.value[index];
+  const layout = imageSize.value[index];
+  const pixelScale = scale.value[index] * (window.devicePixelRatio || 1);
+  if (Number(props.fileType) !== 3 || !['rendered', 'brightened'].includes(rawSource.value)
+    || rawFullSize.value || rawUpgradeFailed || rawRequestPending.value || isLoading.value
+    || imageFilePath.value[index] !== props.filePath || props.originalUnavailable
+    || (layout.width * pixelScale <= natural.width && layout.height * pixelScale <= natural.height)) return;
+  const loadingId = currentLoadingId.value;
+  const selectionVersion = rawSelectionVersion.value;
+  const filePath = String(props.filePath);
+  rawUpgradeTimer = setTimeout(async () => {
+    rawUpgradeTimer = null;
+    if (loadingId !== currentLoadingId.value || selectionVersion !== rawSelectionVersion.value || isLoading.value || rawRequestPending.value) return;
+    rawRequestPending.value = true;
+    try {
+      const loaded = await loadRawImage(filePath, true);
+      if (loadingId !== currentLoadingId.value || selectionVersion !== rawSelectionVersion.value) {
+        URL.revokeObjectURL(loaded.src);
+        rawObjectUrls.delete(loaded.src);
+        return;
+      }
+      // A full-size render that fell back to the embedded preview must not
+      // replace the sharper rendered preview or flip the user's selected mode.
+      if (loaded.raw && loaded.raw.source !== 'rendered' && loaded.raw.source !== 'brightened') {
+        URL.revokeObjectURL(loaded.src);
+        rawObjectUrls.delete(loaded.src);
+        rawUpgradeFailed = true;
+        rawUpgradeRetryAt = Date.now() + 5000;
+        return;
+      }
+      const slot = activeImage.value;
+      const size = imageSize.value[slot];
+      const previous = imageSrc.value[slot];
+      const rotate = imageRotate.value[slot];
+      // setImageSlot recomputes imageSizeRotated from props.rotate; preserve the
+      // viewer's in-place rotation (and its rotated box) across the swap.
+      const rotated = imageSizeRotated.value[slot];
+      setImageSlot(slot, filePath, loaded.src, loaded.naturalWidth, loaded.naturalHeight, size.width, size.height);
+      imageRotate.value[slot] = rotate;
+      imageSizeRotated.value[slot] = rotated;
+      if (loaded.raw) {
+        rawSource.value = loaded.raw.source;
+        rawEmbeddedUnavailable.value = loaded.raw.unavailable;
+        rawFullSize.value = loaded.raw.source === 'rendered' || loaded.raw.source === 'brightened';
+      }
+      if (rawObjectUrls.delete(previous)) URL.revokeObjectURL(previous);
+    } catch {
+      if (loadingId === currentLoadingId.value && selectionVersion === rawSelectionVersion.value) {
+        rawUpgradeFailed = true;
+        rawUpgradeRetryAt = Date.now() + 5000;
+        toast.warning(t('image_viewer.raw_render_unavailable'), { placement: 'bottom-right' });
+      }
+    } finally {
+      if (loadingId === currentLoadingId.value && selectionVersion === rawSelectionVersion.value) rawRequestPending.value = false;
+    }
+  }, 150);
+});
 
 
 let resizeObserver: ResizeObserver | null = null;
@@ -889,6 +968,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('mouseup', handleImageMouseUp, true);
   rawAbortController?.abort();
   for (const url of rawObjectUrls) URL.revokeObjectURL(url);
+  if (rawUpgradeTimer) clearTimeout(rawUpgradeTimer);
   rawObjectUrls.clear();
   cancelAnimationFrame(resizeTransitionFrame);
   if (debounceTimeout) clearTimeout(debounceTimeout);
@@ -1123,6 +1203,7 @@ watch([
   () => props.originalUnavailable,
 ], async ([newFilePath, newFileVersion, newRawThumbnailSource], [oldFilePath, oldFileVersion, oldRawThumbnailSource, oldUnavailable]) => {
   // Cancel previous loading
+  if (rawUpgradeTimer) { clearTimeout(rawUpgradeTimer); rawUpgradeTimer = null; }
   rawAbortController?.abort();
   currentLoadingId.value++;
   const loadingId = currentLoadingId.value;
@@ -1171,7 +1252,7 @@ watch([
     const imageResultPromise = loadImageResource(newFilePath)
       .then((loaded) => ({ kind: 'image' as const, loaded }));
     const keepCurrentRaw = isRawPreview && newFilePath === oldFilePath && !!rawSource.value;
-    const thumbnailResultPromise = !keepCurrentRaw && !usesRealtimePreview && (usesBackendPreview || props.showThumbnailPlaceholder)
+    const thumbnailResultPromise = !keepCurrentRaw && (!isRawPreview || requestedRawOptions.value.mode === 'embedded' || requestedRawOptions.value.preferPair) && !usesRealtimePreview && (usesBackendPreview || props.showThumbnailPlaceholder)
       ? getEffectiveThumbnailSrc()
         .then(async (src) => {
           if (!src) return { kind: 'thumbnail' as const, placeholder: null };
@@ -1278,12 +1359,17 @@ watch([
         const nextImageIndex = activeIndex ^ 1;
         scale.value[nextImageIndex] = 1;
         position.value[nextImageIndex] = { x: 0, y: 0 };
+        const layout = isRawPreview
+          ? getCompatibleLayout(loaded.naturalWidth, loaded.naturalHeight, props.imageWidth, props.imageHeight)
+          : { width: loaded.naturalWidth, height: loaded.naturalHeight };
         setImageSlot(
           nextImageIndex,
           newFilePath,
           loaded.src,
           loaded.naturalWidth,
           loaded.naturalHeight,
+          layout.width,
+          layout.height,
         );
         onImageReady(nextImageIndex);
       }
