@@ -95,6 +95,10 @@ export const useConfigStore = defineStore('configStore', {
       quality: 0,               // jpeg quality (0: High, 1: Medium, 2: Low), [90, 80, 60]
     },
 
+    montage: {
+      lastCustomBackground: '#7c2d12',
+    },
+
     imageViewer: {
       isSyncViewport: false,    // sync viewport
       isFullScreen: false,      // native fullscreen in image viewer window

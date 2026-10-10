@@ -1526,7 +1526,7 @@ pub async fn edit_image(params: t_image::EditParams) -> Result<bool, String> {
 
 /// render a photo montage and save it
 #[tauri::command]
-pub async fn render_montage(params: t_montage::MontageParams) -> Result<(), String> {
+pub async fn render_montage(params: t_montage::MontageParams) -> Result<Option<String>, String> {
     t_montage::render_montage(params).await
 }
 

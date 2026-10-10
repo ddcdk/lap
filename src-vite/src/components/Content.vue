@@ -207,14 +207,15 @@
             showFilmstripLayout ? (config.settings.showStatusBar ? 'mt-12 mb-8' : 'mt-12 mb-1') : ''
           ]"
         >
-          <div v-if="selectMode && !selectionPanelOpen" class="absolute top-14 right-7 z-20 flex items-center gap-1 rounded-box border border-base-content/10 bg-base-200/80 backdrop-blur-md px-2 py-1 shadow-sm"
+          <Transition name="selection-bar" appear>
+          <div v-if="selectMode && !selectionPanelOpen" class="absolute top-16 right-4 z-20 flex items-center gap-1 rounded-box border border-base-content/10 bg-base-200/80 backdrop-blur-md px-2 py-1 shadow-sm"
             :class="{ 'pointer-events-none': uiStore.inputStack.length > 0 }"
             @pointerdown.stop @click.stop
           >
-            <span class="px-1 text-xs tabular-nums" aria-live="polite">
+            <span class="px-1 text-sm tabular-nums text-primary" aria-live="polite">
               {{ selectedCount > 0 ? $t('toolbar.filter.select_count', { count: selectedCount.toLocaleString() }) : $t('toolbar.filter.select_files') }}
             </span>
-            <button class="btn btn-ghost btn-xs btn-square"
+            <button class="btn btn-ghost btn-xs btn-square text-primary"
               :aria-label="$t('toolbar.filter.show_selection_panel')"
               :title="$t('toolbar.filter.show_selection_panel')" @click="openSelectionPanel"
             ><IconPanelMax class="size-4" /></button>
@@ -222,6 +223,7 @@
               :title="`${$t('toolbar.filter.exit_select_mode')} (Esc)`" @click="handleSelectMode(false)"
             ><IconClose class="size-4" /></button>
           </div>
+          </Transition>
           <div class="relative" 
             :class="{ 'flex-1': !showFilmstripLayout }"
             :style="{ 
@@ -730,16 +732,7 @@
     </div>
   </div>
 
-  <Teleport to="body">
-    <div class="print-only">
-      <img
-        v-if="printImageSrc"
-        ref="printImageRef"
-        :src="printImageSrc"
-        alt=""
-      />
-    </div>
-  </Teleport>
+  <PrintImage ref="printImageView" />
 
   <!-- Pops a More-actions submenu parent's children (e.g. "Open in external
        app...") at the clicked toolbar button, reusing ContextMenu's submenu
@@ -759,10 +752,11 @@
 
 <script setup lang="ts">
 
+import PrintImage from '@/components/PrintImage.vue';
 import { defineAsyncComponent, ref, watch, computed, createVNode, onMounted, onBeforeUnmount, nextTick, render, markRaw } from 'vue';
 import { emit as tauriEmit, listen } from '@tauri-apps/api/event';
 import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { WebviewWindow, getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { PREVIEW_WINDOW_FOCUS_RESTORED } from '@/common/previewWindow';
 import { useI18n } from 'vue-i18n';
 import { useToast } from '@/common/toast';
@@ -3745,7 +3739,6 @@ let unlistenKeydown: () => void;
 let unlistenImageViewer: () => void;
 let unlistenImageEditor: (() => void) | null = null;
 let unlistenMontage: (() => void) | null = null;
-let unlistenMontageAdd: (() => void) | null = null;
 let unlistenFaceIndexProgress: (() => void) | null = null;
 let unlistenLibraryTotalRefreshed: (() => void) | null = null;
 let unlistenImportFilesAdded: (() => void) | null = null;
@@ -4801,6 +4794,7 @@ function handleLocalKeyDown(event: KeyboardEvent) {
 
   if (matchesShortcut('file.rename', event, shortcutPlatform)) {
     event.preventDefault();
+    event.stopPropagation();
     clickRename();
     return;
   }
@@ -5751,12 +5745,6 @@ onMounted( async() => {
     }
   });
 
-  // "+ Add" in the montage window: send it the photos selected here
-  unlistenMontageAdd = await listen('montage-add-request', async () => {
-    const fileIds = await getMontageImageIds();
-    await (await WebviewWindow.getByLabel('montage'))?.emit('montage-add-files', { fileIds });
-  });
-
   unlistenImageEditor = await listen('message-from-image-editor', async (event: any) => {
     const { type, saveAsNew, filePath, sourceFileId } = event.payload as any;
     const sourceId = Number(sourceFileId || 0);
@@ -6048,7 +6036,6 @@ onBeforeUnmount(() => {
   unlistenImageViewer();
   if (unlistenImageEditor) unlistenImageEditor();
   if (unlistenMontage) unlistenMontage();
-  if (unlistenMontageAdd) unlistenMontageAdd();
   if (unlistenKeydown) unlistenKeydown();
   if (unlistenTriggerNextAlbum) unlistenTriggerNextAlbum();
   if (unlistenIndexProgress) unlistenIndexProgress();
@@ -10732,17 +10719,13 @@ async function syncSelectionToImageViewer(index: number) {
   });
 }
 
-const MONTAGE_MAX_PHOTOS = 50;
+const MONTAGE_MAX_PHOTOS = 100;
 let montageSaveAsContext: SaveAsContext | null = null;
 let montageSourceFolder = '';
 
 // selected images, including the ones not loaded in the view yet
 async function getMontageImages() {
   return ((await getActionableSelectedItemsForAction()) || []).filter((item: any) => item.file_type !== 2);
-}
-
-async function getMontageImageIds() {
-  return (await getMontageImages()).map((item: any) => Number(item.id));
 }
 
 let montageOpening = false;
@@ -10780,16 +10763,20 @@ async function createMontageWindow() {
   montageSaveAsContext = getCurrentSaveAsContext(images[0]);
   montageSourceFolder = getFolderPath(images[0].file_path);
 
-  // the montage window grows itself if its settings panel does not fit
-  const width = Math.min(1280, window.screen.availWidth);
-  const height = Math.min(800, window.screen.availHeight);
+  const parentWindow = getCurrentWebviewWindow();
+  const [size, position, scaleFactor] = await Promise.all([
+    parentWindow.innerSize(), parentWindow.outerPosition(), parentWindow.scaleFactor(),
+  ]);
+  const { width, height } = size.toLogical(scaleFactor);
+  const { x, y } = position.toLogical(scaleFactor);
 
   const newWindow = new WebviewWindow('montage', {
     url: `/montage?fileIds=${imageIds.slice(0, MONTAGE_MAX_PHOTOS).join(',')}`,
     title: 'Montage',
     width,
     height,
-    center: true,
+    x,
+    y,
     minWidth: 800,
     minHeight: 500,
     resizable: true,
@@ -10807,7 +10794,7 @@ async function createMontageWindow() {
   // wait until the window exists, so a second click finds it
   await new Promise<void>(resolve => {
     newWindow.once('tauri://created', () => {
-      newWindow?.show();
+      newWindow.show();
       resolve();
     });
     newWindow.once('tauri://error', () => resolve());
@@ -10856,23 +10843,7 @@ async function openImageEditor(index: number) {
 
 }
 
-const printImageSrc = ref('');
-const printImageRef = ref<HTMLImageElement | null>(null);
-
-async function waitForPrintImage() {
-  await nextTick();
-  const image = printImageRef.value;
-  if (!image) throw new Error('Print image element was not rendered');
-  if (image.complete) {
-    if (image.naturalWidth > 0) return;
-    throw new Error('Print image failed to load');
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    image.addEventListener('load', () => resolve(), { once: true });
-    image.addEventListener('error', () => reject(new Error('Print image failed to load')), { once: true });
-  });
-}
+const printImageView = ref<InstanceType<typeof PrintImage> | null>(null);
 
 async function printImage(index: number) {
   const selectedFile = fileList.value[index];
@@ -10882,7 +10853,7 @@ async function printImage(index: number) {
   const fileType = Number(selectedFile.file_type || 1);
 
   try {
-    printImageSrc.value = shouldUseBackendPreview(selectedFile.file_path, fileType)
+    const source = shouldUseBackendPreview(selectedFile.file_path, fileType)
       ? getPreviewUrl(
         fileId,
         selectedFile.file_path,
@@ -10890,16 +10861,8 @@ async function printImage(index: number) {
         Number(selectedFile.modified_at || 0),
       )
       : getAssetSrc(selectedFile.file_path, Number(selectedFile.modified_at || 0));
-    await waitForPrintImage();
-    // Defer to let the context menu / UI close before the synchronous print dialog opens
-    setTimeout(() => {
-      window.addEventListener('afterprint', () => {
-        printImageSrc.value = '';
-      }, { once: true });
-      window.print();
-    }, 100);
+    await printImageView.value?.print(source);
   } catch (error) {
-    printImageSrc.value = '';
     console.error('Failed to prepare image for printing:', error);
   }
 }
@@ -10953,49 +10916,26 @@ defineExpose({
 </script>
 
 <style scoped>
-.print-only {
-  display: none;
+.selection-bar-enter-active,
+.selection-bar-leave-active {
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
 }
 
-@media print {
-  @page {
-    margin: 0;
-  }
-
-  :global(html),
-  :global(body) {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-  }
-
-  :global(body > *:not(.print-only)) {
-    display: none !important;
-  }
-
-  .print-only {
-    position: absolute;
-    inset: 0;
-    box-sizing: border-box;
-    display: grid !important;
-    place-items: center;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: #fff;
-    break-inside: avoid;
-  }
-
-  .print-only img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    object-position: center;
-  }
+.selection-bar-enter-from,
+.selection-bar-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
 }
+
+.selection-bar-leave-active {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selection-bar-enter-active,
+  .selection-bar-leave-active { transition: none; }
+}
+
 
 .drop-overlay {
   position: absolute;

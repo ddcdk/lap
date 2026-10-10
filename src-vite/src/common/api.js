@@ -1097,7 +1097,7 @@ export async function editImage(params) {
 
 // render a photo montage and save it (throws the backend error message)
 export async function renderMontage(params) {
-  return await invoke('render_montage', { params });
+  return await invoke('render_montage', { params: { ...params, rawDisplayOptions: getRawDisplayOptions() } });
 }
 
 // copy an edited image to clipboard

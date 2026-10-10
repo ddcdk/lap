@@ -7247,6 +7247,14 @@ impl AThumb {
         Ok(thumb)
     }
 
+    pub(crate) fn cached_montage_bytes(file_id: i64, path: &str, orientation: i32, options: RawDisplayOptions) -> Option<Vec<u8>> {
+        let thumb = Self::fetch(file_id).ok()??;
+        if thumb.error_code != 0 || thumb.is_stale(path, 0) || thumb.raw_display_is_stale(path, orientation, options) {
+            return None;
+        }
+        thumb.thumb_data
+    }
+
     /// fetch a thumbnail from db by file_id
     pub fn fetch(file_id: i64) -> Result<Option<Self>, String> {
         let library_id = Self::get_current_library_id();

@@ -27,6 +27,12 @@ const isMainWindow = currentWindowLabel === 'main'
 const isSettingsWindow = currentWindowLabel === 'settings'
 let settingsSyncRequest = 0
 
+listen('montage-background-changed', (event) => {
+  if (typeof event.payload === 'string' && /^#[0-9a-f]{6}$/i.test(event.payload)) {
+    config.montage.lastCustomBackground = event.payload.toLowerCase()
+  }
+})
+
 // Fetch the OS locale once so "follow system" date/time formatting has a value.
 void getOsLocale().then((loc) => config.setSystemLocale(loc)).catch(() => {})
 
