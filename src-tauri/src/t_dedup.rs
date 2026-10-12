@@ -345,6 +345,9 @@ fn get_files_by_sizes(conn: &Connection) -> Result<Vec<AFile>, String> {
                 motion_photo_offset: None,
                 album_accessible: true,
                 album_visible: true,
+                cloud_only: false,
+                metadata_pending: false,
+                live_photo_video_cloud_only: false,
             })
         })
         .map_err(|e| e.to_string())?;

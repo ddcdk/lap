@@ -1499,7 +1499,7 @@ impl FolderScanState {
 }
 
 /// Define the album file struct
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct AFile {
     pub id: Option<i64>, // unique id (autoincrement by db)
     pub folder_id: i64,  // folder id (from folders table)
@@ -1575,6 +1575,12 @@ pub struct AFile {
     #[serde(default = "default_album_visible")]
     pub album_visible: bool, // output-only: visibility under this album's filters
     pub motion_photo_offset: Option<i64>,   // byte offset of embedded MP4 (Android Motion Photo)
+    #[serde(default)]
+    pub cloud_only: bool, // online-only placeholder when last scanned
+    #[serde(default)]
+    pub metadata_pending: bool, // indexed without reading the content
+    #[serde(default)]
+    pub live_photo_video_cloud_only: bool, // output-only: paired Live Photo video is online-only
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -2677,6 +2683,9 @@ impl AFile {
             motion_photo_offset,
             album_accessible: true,
             album_visible: true,
+            cloud_only: false,
+            metadata_pending: false,
+            live_photo_video_cloud_only: false,
         };
 
         Ok(file)
@@ -2934,9 +2943,9 @@ impl AFile {
                 is_favorite, rating, rotate, comments, has_tags,
                 e_make, e_model, e_date_time, e_software, e_artist, e_copyright, e_description, e_lens_make, e_lens_model, e_exposure_bias, e_exposure_time, e_f_number, e_focal_length, e_iso_speed, e_flash, e_orientation,
                 gps_latitude, gps_longitude, gps_altitude, geo_name, geo_admin1, geo_admin2, geo_cc,
-                last_scan_time, content_identifier, media_subtype, motion_photo_offset
+                last_scan_time, content_identifier, media_subtype, motion_photo_offset, cloud_only, metadata_pending
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45, ?46, ?47)
             ON CONFLICT(folder_id, name) DO NOTHING",
             params![
                 self.folder_id,
@@ -2990,6 +2999,8 @@ impl AFile {
                 self.content_identifier,
                 self.media_subtype,
                 self.motion_photo_offset,
+                self.cloud_only,
+                self.metadata_pending,
             ]
         ).map_err(|e| e.to_string())?;
         Ok(result)
@@ -3215,7 +3226,10 @@ impl AFile {
                     ELSE NULL
                 END AS live_photo_video_path,
                 a.motion_photo_offset,
-                {} AS album_visible
+                {} AS album_visible,
+                a.cloud_only,
+                a.metadata_pending,
+                COALESCE(lpv.cloud_only, 0) AS live_photo_video_cloud_only
             FROM afiles a
             LEFT JOIN afolders b ON a.folder_id = b.id
             LEFT JOIN albums c ON b.album_id = c.id
@@ -3296,6 +3310,9 @@ impl AFile {
             motion_photo_offset: row.get(55)?,
             album_accessible: row.get::<_, Option<i64>>(44)?.is_none_or(t_utils::album_accessible),
             album_visible: row.get(56)?,
+            cloud_only: row.get(57)?,
+            metadata_pending: row.get(58)?,
+            live_photo_video_cloud_only: row.get(59)?,
         })
     }
 
@@ -9785,6 +9802,8 @@ fn create_db_internal() -> Result<(), String> {
             media_subtype TEXT,
             live_photo_video_id INTEGER,
             motion_photo_offset INTEGER,
+            cloud_only INTEGER NOT NULL DEFAULT 0,
+            metadata_pending INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (folder_id) REFERENCES afolders(id) ON DELETE CASCADE
         )",
         [],
