@@ -562,6 +562,7 @@
       },
       "reclaimable_size": "Récupérable",
       "groups_title": "Groupes de doublons",
+      "skipped_cloud_only": "{count} fichiers disponibles uniquement en ligne ignorés",
       "actions_title": "Actions",
       "compare": "Comparer",
       "rescan": "Relancer l’analyse",

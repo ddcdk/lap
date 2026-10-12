@@ -320,6 +320,9 @@
               {{ totalGroupCount.toLocaleString() }}
             </span>
           </div>
+          <div v-if="skippedCloudOnlyCount > 0" class="px-1 text-xs text-base-content/50">
+            {{ $t('info_panel.dedup.skipped_cloud_only', { count: skippedCloudOnlyCount.toLocaleString() }) }}
+          </div>
           <div
             ref="duplicateGroupsScrollRef"
             class="min-h-0 flex-1 overflow-y-auto py-1"
@@ -602,6 +605,8 @@ const totalDuplicateFileCount = ref(0);
 const totalReclaimableBytes = ref(0);
 const albumRootPaths = ref<Map<number, string>>(new Map());
 const dedupStatusPollTimer = ref<ReturnType<typeof setInterval> | null>(null);
+// Online-only files the last scan left unhashed (hashing would download them).
+const skippedCloudOnlyCount = ref(0);
 const isPollingDedupStatus = ref(false);
 const loadedDuplicateGroupCount = ref(DEDUP_THUMBNAIL_PAGE_SIZE);
 const duplicateGroupsScrollRef = ref<HTMLElement | null>(null);
@@ -1525,6 +1530,7 @@ async function handleDedupScanSettled(allowWhileStarting = false) {
     showDedupScanError();
     return;
   }
+  skippedCloudOnlyCount.value = Number(status.skipped || 0);
   await fetchGroups();
   if (gen !== scanGeneration.value) return;
   // Only clear the loading flag after results are ready, so the

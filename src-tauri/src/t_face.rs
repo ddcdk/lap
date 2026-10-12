@@ -753,7 +753,12 @@ pub fn run_face_indexing(
 
             // Optimization: Try to use thumbnail first
             // We need to know if we used a thumbnail to scale the bbox
-            let (process_result, used_thumb) = match t_sqlite::AThumb::fetch(file_id) {
+            let thumb = t_sqlite::AThumb::fetch(file_id);
+            // Reading the online-only original would download it; retry once it is local.
+            if !matches!(&thumb, Ok(Some(t)) if t.thumb_data.is_some()) && crate::t_utils::is_cloud_only_path(&file_path) {
+                continue;
+            }
+            let (process_result, used_thumb) = match thumb {
                 Ok(Some(thumb)) if thumb.thumb_data.is_some() => {
                     let thumb_bytes = thumb.thumb_data.as_ref().unwrap();
                     match engine.process_image_from_bytes(thumb_bytes) {

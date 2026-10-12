@@ -6602,12 +6602,20 @@ impl AFile {
             }
         }
 
+        // Without a stored thumbnail, encoding reads (and would download) an online-only original.
+        let thumb = AThumb::fetch(file_id);
+        if !matches!(&thumb, Ok(Some(t)) if t.thumb_data.is_some()) && t_utils::is_cloud_only_path(&file_path) {
+            return Err("Skipped: the original is online-only".to_string());
+        }
+
         // 4. Generate embedding
         let mut engine = state.0.lock().unwrap();
 
         // Optimized: Use thumbnail if available (much faster than loading original)
         // Fallback to original file if thumbnail is missing or fails to process
-        let embedding = match AThumb::fetch(file_id) {
+        // ponytail: a corrupt stored thumbnail still falls back to the original, which downloads an
+        // online-only file; add the online-only check here too if that is ever observed.
+        let embedding = match thumb {
             Ok(Some(thumb)) if thumb.thumb_data.is_some() => {
                 let thumb_bytes = thumb.thumb_data.as_ref().unwrap();
                 match panic::catch_unwind(AssertUnwindSafe(|| {
@@ -7694,6 +7702,10 @@ impl AThumb {
         known_duration: Option<u64>,
         seek_percent: Option<u8>,
     ) -> Result<Option<Self>, String> {
+        // Reading an online-only original would download it; keep whatever is cached.
+        if t_utils::is_cloud_only_path(file_path) {
+            return Self::fetch_for_library(file_id, library_id);
+        }
         if Self::should_use_original_image(file_id, file_type, thumbnail_size) {
             let athumb = Self {
                 id: None,
@@ -7782,7 +7794,7 @@ impl AThumb {
         force_regenerate: bool,
         album_accessible: bool,
     ) -> Result<Option<Self>, String> {
-        if !album_accessible || (force_regenerate && !t_utils::file_accessible(file_path)) {
+        if !album_accessible || (force_regenerate && !t_utils::content_readable(file_path)) {
             return Self::fetch(file_id);
         }
 
@@ -7834,7 +7846,7 @@ impl AThumb {
         trust_cached: bool,
         album_accessible: bool,
     ) -> Result<Option<Self>, String> {
-        if !album_accessible || (force_regenerate && !t_utils::file_accessible(file_path)) {
+        if !album_accessible || (force_regenerate && !t_utils::content_readable(file_path)) {
             return Ok(Some(thumbnail));
         }
 
@@ -7951,7 +7963,7 @@ impl AThumb {
         seek_percent: Option<u8>,
     ) -> Result<Option<Self>, String> {
         let album_accessible = Self::get_file_album_id(file_id)?.is_none_or(t_utils::album_accessible);
-        if !album_accessible || (force_regenerate && !t_utils::file_accessible(file_path)) {
+        if !album_accessible || (force_regenerate && !t_utils::content_readable(file_path)) {
             return Self::fetch(file_id);
         }
 
@@ -8015,7 +8027,10 @@ impl AThumb {
             if thumb.error_code == 2 {
                 if let Ok(Some(file)) = AFile::get_file_info(file_id) {
                     if let Some(ref file_path) = file.file_path {
-                        if let Ok(data) = std::fs::read(file_path) {
+                        // A small image is shown from its original; an online-only one would download.
+                        if t_utils::content_readable(file_path)
+                            && let Ok(data) = std::fs::read(file_path)
+                        {
                             return Ok(Some(data));
                         }
                     }
@@ -10574,6 +10589,23 @@ mod raw_display_cache_tests {
         assert_eq!(retained.thumb_data, Some(vec![1, 2, 3]));
         assert_eq!(retained.thumb_key.as_deref(), Some("offline-cache-key"));
         assert_eq!(retained.thumb_size, Some(256));
+    }
+
+    /// Set LAP_CLOUD_ONLY_FILE to run: a forced refresh must keep the cached thumbnail of an online-only file.
+    #[test]
+    fn forced_refresh_keeps_cached_thumbnail_of_online_only_file() {
+        let Ok(path) = std::env::var("LAP_CLOUD_ONLY_FILE") else { return };
+        let thumb = AThumb {
+            id: Some(1), file_id: 42, error_code: 0,
+            thumb_data: Some(vec![1, 2, 3]), thumb_key: Some("cloud-cache-key".into()),
+            thumb_mtime: Some(123), thumb_size: Some(256), updated_at: Some(123),
+            thumb_data_base64: Some("AQID".into()),
+        };
+        let retained = AThumb::resolve_fetched_thumb_if_available(
+            thumb, &path, 512, 1, RawDisplayOptions::default(), true, false, true,
+        ).unwrap().unwrap();
+        assert_eq!(retained.thumb_data, Some(vec![1, 2, 3]));
+        assert!(crate::t_utils::is_cloud_only_path(&path), "the thumbnail check downloaded the file");
     }
 
     #[test]
