@@ -2874,6 +2874,43 @@ pub struct FileRefreshResult {
     size_delta: i64,
     /// True when the file was left unread because it is an unchanged cloud-only file.
     skipped: bool,
+    /// True when OneDrive was asked to free the file again (index_cloud_file only).
+    released: bool,
+}
+
+/// Re-read a file's metadata. Without `force`, an unchanged online-only file is left unread.
+fn refresh_file(file_id: i64, force: bool) -> Result<Option<FileRefreshResult>, String> {
+    let old = AFile::get_file_info(file_id)?.ok_or("File not found")?;
+    let path = old.file_path.as_deref().ok_or("File path missing")?;
+    // Reading a cloud-only file downloads it; if its size and date still
+    // match the stored info, there is nothing new to read.
+    if !force && fs::metadata(path).is_ok_and(|m| {
+        t_utils::is_cloud_only(&m)
+            && m.len() as i64 == old.size
+            && t_utils::systemtime_to_timestamp(m.modified().ok()) == old.modified_at
+    }) {
+        return Ok(Some(FileRefreshResult { file: old, size_delta: 0, skipped: true, released: false }));
+    }
+    let updated = AFile::update_file_info(file_id, path, chrono::Utc::now().timestamp_millis())?;
+    // The read downloaded the file: it is local and fully read.
+    AFile::update_column(file_id, "cloud_only", &false)?;
+    AFile::update_column(file_id, "metadata_pending", &false)?;
+    if let Some(ref file) = updated {
+        let content_changed = old.modified_at != file.modified_at || old.size != file.size;
+        if content_changed || old.width != file.width || old.height != file.height
+            || old.e_orientation != file.e_orientation {
+            AThumb::delete(file_id)?;
+        }
+        if content_changed {
+            AFile::update_column(file_id, "embeds", &Option::<Vec<u8>>::None)?;
+        }
+    }
+    Ok(AFile::get_file_info(file_id)?.map(|file| FileRefreshResult {
+        size_delta: file.size - old.size,
+        file,
+        skipped: false,
+        released: false,
+    }))
 }
 
 /// Force a selected file refresh without accepting a stale frontend file path.
@@ -2884,34 +2921,44 @@ pub async fn refresh_selected_file_info(library_id: String, file_id: i64) -> Res
         if t_config::current_library_id()? != library_id {
             return Err("Library changed".to_string());
         }
-        let old = AFile::get_file_info(file_id)?.ok_or("File not found")?;
-        let path = old.file_path.as_deref().ok_or("File path missing")?;
-        // Reading a cloud-only file downloads it; if its size and date still
-        // match the stored info, there is nothing new to read.
-        if fs::metadata(path).is_ok_and(|m| {
-            t_utils::is_cloud_only(&m)
-                && m.len() as i64 == old.size
-                && t_utils::systemtime_to_timestamp(m.modified().ok()) == old.modified_at
-        }) {
-            return Ok(Some(FileRefreshResult { file: old, size_delta: 0, skipped: true }));
-        }
-        let updated = AFile::update_file_info(file_id, path, chrono::Utc::now().timestamp_millis())?;
-        if let Some(ref file) = updated {
-            let content_changed = old.modified_at != file.modified_at || old.size != file.size;
-            if content_changed || old.width != file.width || old.height != file.height
-                || old.e_orientation != file.e_orientation {
-                AThumb::delete(file_id)?;
-            }
-            if content_changed {
-                AFile::update_column(file_id, "embeds", &Option::<Vec<u8>>::None)?;
-            }
-        }
-        Ok(AFile::get_file_info(file_id)?.map(|file| FileRefreshResult {
-            size_delta: file.size - old.size,
-            file,
-            skipped: false,
-        }))
+        refresh_file(file_id, false)
     }).await.map_err(|e| format!("File refresh task failed: {e}"))?
+}
+
+/// "Download, index, then free up space": index an online-only file in full,
+/// store its thumbnail, then ask OneDrive to free it again. Local files are
+/// refreshed and stay local.
+#[tauri::command]
+pub async fn index_cloud_file(
+    library_id: String,
+    file_id: i64,
+    thumbnail_size: u32,
+    raw_display_options: RawDisplayOptions,
+) -> Result<Option<FileRefreshResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = FILE_REFRESH_LIBRARY_LOCK.read().map_err(|e| e.to_string())?;
+        if t_config::current_library_id()? != library_id {
+            return Err("Library changed".to_string());
+        }
+        let path = AFile::get_file_info(file_id)?.and_then(|file| file.file_path).ok_or("File not found")?;
+        let was_cloud_only = t_utils::is_cloud_only_path(&path);
+        let Some(mut result) = refresh_file(file_id, true)? else { return Ok(None) };
+        if !was_cloud_only {
+            return Ok(Some(result));
+        }
+        let file = &result.file;
+        AThumb::get_or_create_thumb(
+            file_id, &path, file.file_type.unwrap_or(0), file.e_orientation.unwrap_or(1) as i32,
+            thumbnail_size, raw_display_options, true, file.duration.map(|d| d as u64), None,
+        )?;
+        // All handles are closed here; a pinned or protected file stays local.
+        result.released = t_utils::release_cloud_file(&path).unwrap_or(false);
+        AFile::update_column(file_id, "cloud_only", &result.released)?;
+        if let Some(file) = AFile::get_file_info(file_id)? {
+            result.file = file;
+        }
+        Ok(Some(result))
+    }).await.map_err(|e| format!("Cloud file indexing task failed: {e}"))?
 }
 
 /// add or refresh a file in db and return the indexed file info

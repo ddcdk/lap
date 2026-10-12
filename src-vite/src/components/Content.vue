@@ -582,6 +582,7 @@
     v-if="fileRefreshSelection"
     :file-ids="fileRefreshSelection.ids"
     :library-id="fileRefreshSelection.libraryId"
+    :free-space="fileRefreshSelection.freeSpace"
     :finish-refresh="finishSelectedFileRefresh"
     @close="fileRefreshSelection = null"
   />
@@ -1149,11 +1150,11 @@ function removeDeletedFilesFromImageViewerSession(fileIds: number[]) {
   return files.length;
 }
 
-const fileRefreshSelection = ref<{ ids: number[]; libraryId: string; requestId: number; groupSizes: Map<string, number> } | null>(null);
-function startSelectedFileRefresh() {
+const fileRefreshSelection = ref<{ ids: number[]; libraryId: string; requestId: number; groupSizes: Map<string, number>; freeSpace: boolean } | null>(null);
+function startSelectedFileRefresh(freeSpace = false) {
   if (fileRefreshSelection.value || selectedFileIds.size === 0) return;
   fileRefreshSelection.value = {
-    ids: Array.from(selectedFileIds), libraryId: libConfig._libraryId, requestId: currentContentRequestId,
+    ids: Array.from(selectedFileIds), libraryId: libConfig._libraryId, requestId: currentContentRequestId, freeSpace,
     groupSizes: new Map(Array.from(groupMetaMap, ([id, meta]) => [id, meta.size])),
   };
 }
@@ -1206,6 +1207,7 @@ const selectionAccessPending = ref(false);
 const selectionHasUnavailable = computed(() => selectionAccessPending.value
   || selectionAccessFiles.value.some(isOriginalUnavailable)
   || getActionableSelectedItems().some(isOriginalUnavailable));
+const selectionHasCloudOnly = computed(() => getActionableSelectedItems().some(file => file.cloud_only));
 let selectionAccessRequest = 0;
 let selectionAccessTimer: ReturnType<typeof setTimeout> | null = null;
 watch([selectMode, selectedFilesVersion, () => libConfig._libraryId], () => {
@@ -1244,6 +1246,7 @@ const selectionMenuItems = useFileMenuItems(
     selectionMediaKind,
     selectionCount: selectedCount,
     selectionHasUnavailable,
+    selectionHasCloudOnly,
   },
 );
 
@@ -4395,6 +4398,7 @@ function handleItemAction(payload: { action: string, index: number }) {
     },
     'reveal': () => revealPath(fileList.value[selectedItemIndex.value].file_path),
     'refresh-file-info': () => selectMode.value ? startSelectedFileRefresh() : void updateFile(fileList.value[selectedItemIndex.value], true),
+    'index-cloud-files': () => startSelectedFileRefresh(true),
     'favorite': toggleFavorite,
     'rotate': clickRotate,
     'info': toggleInfoPanel,
