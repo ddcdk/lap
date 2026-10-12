@@ -226,6 +226,8 @@
     }
   },
   "offline": {
+    "cloud_only": "Available online only",
+    "cloud_only_pending": "Available online only — information incomplete",
     "original_unavailable": "Original file is unavailable",
     "requires_original": "Requires the original file. Reconnect the storage device to use this action."
   },

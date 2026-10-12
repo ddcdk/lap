@@ -877,7 +877,7 @@ async function hydrateSimilarThumbnails(groups: any[], activeGroupId: number | n
       null,
       file.album_id || 0,
     );
-    file.thumbnail = getThumbnailDataUrl(thumb, thumbnailPlaceholder, false, config.settings.thumbnailSize, file.file_path, Number(file.modified_at || 0));
+    file.thumbnail = getThumbnailDataUrl(thumb, thumbnailPlaceholder, false, config.settings.thumbnailSize, file.file_path, Number(file.modified_at || 0), !file.cloud_only);
   }));
 }
 
@@ -1368,7 +1368,7 @@ async function hydrateGroupThumbnails(groups: any[], activeGroupId: number | nul
           null,
           file.album_id || 0,
         );
-        file.thumbnail = getThumbnailDataUrl(thumb, thumbnailPlaceholder, false, config.settings.thumbnailSize, file.file_path, Number(file.modified_at || 0));
+        file.thumbnail = getThumbnailDataUrl(thumb, thumbnailPlaceholder, false, config.settings.thumbnailSize, file.file_path, Number(file.modified_at || 0), !file.cloud_only);
       })());
     }
   }

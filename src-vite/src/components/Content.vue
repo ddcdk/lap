@@ -9370,7 +9370,7 @@ const updateThumbForFile = async (file: any) => {
   );
   if (thumb) {
     if (thumb.error_code === 0 || thumb.error_code === 2) {
-      file.thumbnail = getThumbnailDataUrl(thumb, thumbnailPlaceholder, true, config.settings.thumbnailSize, file.file_path, Number(file.modified_at || 0));
+      file.thumbnail = getThumbnailDataUrl(thumb, thumbnailPlaceholder, true, config.settings.thumbnailSize, file.file_path, Number(file.modified_at || 0), !file.cloud_only);
       file.rawThumbnailStale = false;
     } else if (thumb.error_code === 1) {
       file.rawThumbnailStale = false;
@@ -10499,7 +10499,7 @@ async function getFileListThumb(files: any[], offset = 0, concurrencyLimit = 4, 
     if (!thumb) return;
 
     if (thumb.error_code === 0 || thumb.error_code === 2) {
-      file.thumbnail = getThumbnailDataUrl(thumb, thumbnailPlaceholder, bustCache, thumbnailSize, file.file_path, Number(file.modified_at || 0));
+      file.thumbnail = getThumbnailDataUrl(thumb, thumbnailPlaceholder, bustCache, thumbnailSize, file.file_path, Number(file.modified_at || 0), !file.cloud_only);
       file.rawThumbnailStale = false;
     } else if (thumb.error_code === 1) {
       file.rawThumbnailStale = false;

@@ -88,6 +88,9 @@
       <div v-if="originalUnavailable" class="pointer-events-none absolute right-0.5 bottom-0.5 z-20 thumb-badge thumb-badge-muted" :aria-label="t('offline.original_unavailable')">
         <IconExclamation class="h-3.5 w-3.5 shrink-0 text-warning/70" />
       </div>
+      <div v-else-if="file.cloud_only" class="absolute right-0.5 bottom-0.5 z-20 thumb-badge thumb-badge-muted" :title="cloudOnlyLabel" :aria-label="cloudOnlyLabel">
+        <IconCloud class="h-3.5 w-3.5 shrink-0" />
+      </div>
 
       <!-- status badges -->
       <div
@@ -246,6 +249,7 @@ import { useFileMenuItems } from '@/common/fileMenu';
 import { 
   IconMore,
   IconExclamation,
+  IconCloud,
   IconPhoto,
   IconHeartFilled,
   IconTag,
@@ -326,6 +330,8 @@ const canPreviewVideo = computed(() => (
   !originalUnavailable.value && (isVideoFile.value || isLivePhoto.value)
   && !!previewVideoPath.value
   && !isWebViewVideoPlaybackDisabled(previewVideoPath.value)
+  // Playing an online-only video would download it.
+  && !(isLivePhoto.value ? props.file.live_photo_video_cloud_only : props.file.cloud_only)
 ));
 const ANIMATABLE_IMAGE_EXTENSIONS = new Set(['gif', 'png', 'apng', 'webp', 'avif']);
 const isAnimatableImageFile = computed(() => ANIMATABLE_IMAGE_EXTENSIONS.has(
@@ -333,7 +339,8 @@ const isAnimatableImageFile = computed(() => ANIMATABLE_IMAGE_EXTENSIONS.has(
 ));
 const isGifFile = computed(() => getFileExtension(props.file?.name || props.file?.file_path || '').toLowerCase() === 'gif');
 const animatedImagePreviewSrc = computed(() => getAssetSrc(props.file?.file_path || '', Number(props.file?.modified_at || 0)));
-const canPreviewAnimatedImage = computed(() => !originalUnavailable.value && isAnimatableImageFile.value && !!animatedImagePreviewSrc.value);
+const canPreviewAnimatedImage = computed(() => !originalUnavailable.value && !props.file?.cloud_only
+  && isAnimatableImageFile.value && !!animatedImagePreviewSrc.value);
 const isGeometryGridStyle = computed(() => config.settings.grid.style === 2 || config.settings.grid.style === 3);
 // Pair previews can have a different crop than the RAW dimensions used by layout.
 const fitRawPairPreview = computed(() => isGeometryGridStyle.value && isRawJpegPair.value
@@ -596,6 +603,7 @@ const isContentActive = computed(() =>
   uiStore.activePane === 'content' && uiStore.inputStack.length === 0
 );
 const { locale, messages, t } = useI18n();
+const cloudOnlyLabel = computed(() => t(props.file?.metadata_pending ? 'offline.cloud_only_pending' : 'offline.cloud_only'));
 const localeMsg = computed(() => messages.value[locale.value] as any);
 
 const menuItems = useFileMenuItems(
