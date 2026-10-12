@@ -2552,9 +2552,12 @@ fn sync_folder_direct_files(
                     return Ok(FolderSyncOutcome::default());
                 }
                 // Update the existing DB record to point to the new name/path.
-                if let Ok(Some(updated_file)) =
+                let renamed_file = if content_readable(file_path_str) {
                     AFile::update_file_info(db_id, file_path_str, scan_time)
-                {
+                } else {
+                    AFile::update_path(db_id, file_path_str, scan_time)
+                };
+                if let Ok(Some(updated_file)) = renamed_file {
                     rename_count += 1;
                     if is_live_photo_candidate_name(&file_name) {
                         live_photo_affected_names.insert(file_name.clone());
@@ -2779,6 +2782,21 @@ fn reconcile_raw_jpeg_pairs_after_album_index(
 
 /// Sync a single folder when its directory mtime has changed.
 /// Returns counts and schedules thumbnail/embedding generation.
+/// Track "Free up space" / "Always keep on this device", which leave the folder mtime unchanged.
+fn refresh_cloud_only_flags(folder_id: i64) -> Result<bool, String> {
+    let mut changed = false;
+    for file in AFile::get_files_by_folder_id(folder_id)? {
+        let (Some(id), Some(path)) = (file.id, file.file_path.as_deref()) else { continue };
+        let Ok(metadata) = fs::metadata(path) else { continue };
+        let cloud_only = is_cloud_only(&metadata);
+        if cloud_only != file.cloud_only {
+            AFile::update_column(id, "cloud_only", &cloud_only)?;
+            changed = true;
+        }
+    }
+    Ok(changed)
+}
+
 pub fn sync_single_folder(
     app_handle: &tauri::AppHandle,
     album_id: i64,
@@ -2855,6 +2873,7 @@ pub fn sync_single_folder(
         FolderScanState::LIVE_PHOTO_PAIRING_VERSION,
     )?;
     if info.modified == folder.modified_at && !needs_live_photo_reindex {
+        let cloud_flags_changed = refresh_cloud_only_flags(resolved_folder_id)?;
         // An unchanged mtime-driven sync still reconciles the existing pair state.
         // This is intentionally the only incremental path that receives the
         // setting; changing Settings alone does not mutate the database.
@@ -2875,7 +2894,7 @@ pub fn sync_single_folder(
             // The frontend uses this to decide whether it needs to reload the
             // current list.  A newly created or cleared association changes
             // which companion rows are visible.
-            dirty_folder_count: u32::from(raw_pairing_changed || folder_layout_changed),
+            dirty_folder_count: u32::from(raw_pairing_changed || folder_layout_changed || cloud_flags_changed),
             new_folder_count,
             new_file_count: 0,
             updated_file_count: 0,
@@ -3081,6 +3100,11 @@ static FILTER_DIMENSIONS_CACHE: Lazy<Mutex<FilterDimensionsCache>> =
 /// modification time invalidate changed files; the FIFO cache has a 32 MiB budget.
 fn filter_image_dimensions(path: &str, file_type: i64) -> Option<(u32, u32)> {
     let metadata = fs::metadata(path).ok()?;
+    // Measuring an online-only image would download it; the stored dimensions
+    // apply instead (index_single_file and should_process_synced_file).
+    if is_cloud_only(&metadata) {
+        return None;
+    }
     let modified = metadata.modified().ok()?;
     if let Ok(cache) = FILTER_DIMENSIONS_CACHE.lock() {
         if let Some(entry) = cache.entries.get(path) {
@@ -4610,6 +4634,7 @@ mod cloud_only_tests {
         assert!(!content_readable(&path));
         assert!(is_cloud_only_path(&path));
         FileInfo::new(&path).unwrap();
+        assert_eq!(filter_image_dimensions(&path, 1), None);
         assert!(is_cloud_only(&fs::metadata(&path).unwrap()), "an accessibility or metadata check downloaded the file");
     }
 

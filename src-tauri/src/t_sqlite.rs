@@ -2203,6 +2203,31 @@ pub struct LibraryVisibleCounts {
     pub pick: i64, pub reject: i64, pub unreviewed: i64,
 }
 
+/// What a scan may do with a file without downloading it.
+#[derive(Debug, PartialEq)]
+pub(crate) enum CloudScanAction {
+    /// Local file: the regular scan, which reads the content.
+    Read,
+    /// Local file indexed while online-only: read it in full even if unchanged.
+    ReadPending,
+    /// Unknown online-only file: record what the directory entry tells us.
+    InsertStub,
+    /// Unchanged online-only file: only mark it as seen.
+    MarkSeen,
+    /// Changed online-only file: store the new size and dates, keep the rest.
+    UpdateStat,
+}
+
+pub(crate) fn cloud_scan_action(cloud_only: bool, stored: Option<&AFile>, size: i64, modified: Option<i64>) -> CloudScanAction {
+    match (cloud_only, stored) {
+        (false, Some(file)) if file.metadata_pending => CloudScanAction::ReadPending,
+        (false, _) => CloudScanAction::Read,
+        (true, None) => CloudScanAction::InsertStub,
+        (true, Some(file)) if file.size == size && file.modified_at == modified => CloudScanAction::MarkSeen,
+        (true, Some(_)) => CloudScanAction::UpdateStat,
+    }
+}
+
 impl AFile {
     pub fn get_library_visible_counts() -> Result<LibraryVisibleCounts, String> {
         let conn = open_conn()?;
@@ -2242,6 +2267,42 @@ impl AFile {
 
     fn new(folder_id: i64, file_path: &str, file_type: i64) -> Result<Self, String> {
         Self::new_with_raw_info(folder_id, file_path, file_type, None)
+    }
+
+    /// Catalog entry for an online-only file, built from its directory entry alone.
+    fn cloud_stub(folder_id: i64, file_path: &str, file_type: i64, last_scan_time: i64) -> Result<Self, String> {
+        let info = t_utils::FileInfo::new(file_path)?;
+        Ok(Self {
+            folder_id,
+            name_pinyin: Some(t_utils::natural_sort_key(&info.file_name.to_lowercase())),
+            name: info.file_name,
+            size: info.file_size,
+            file_type: Some(file_type),
+            created_at: info.created,
+            modified_at: info.modified,
+            inode: Some(info.inode as i64),
+            taken_date: info.modified,
+            rating: Some(0),
+            culling_flag: Some(0),
+            has_tags: Some(false),
+            has_faces: Some(0),
+            last_scan_time: Some(last_scan_time),
+            cloud_only: true,
+            metadata_pending: true,
+            album_accessible: true,
+            album_visible: true,
+            ..Default::default()
+        })
+    }
+
+    /// Follow a rename without reading the file (online-only files).
+    pub fn update_path(file_id: i64, file_path: &str, last_scan_time: i64) -> Result<Option<Self>, String> {
+        let name = t_utils::get_file_name(file_path);
+        open_conn()?.execute(
+            "UPDATE afiles SET name = ?1, name_pinyin = ?2, last_scan_time = ?3, cloud_only = 1 WHERE id = ?4",
+            params![name, t_utils::natural_sort_key(&name.to_lowercase()), last_scan_time, file_id],
+        ).map_err(|e| e.to_string())?;
+        Self::get_file_info(file_id)
     }
 
     fn new_with_raw_info(folder_id: i64, file_path: &str, file_type: i64, raw_info: Option<t_libraw::RawInfo>) -> Result<Self, String> {
@@ -3723,7 +3784,73 @@ impl AFile {
     ) -> Result<(Self, i32), String> {
         // Check if the file exists
         let existing_file = Self::fetch(folder_id, file_path)?;
+        // Opening an online-only file downloads it: decide from its attributes first.
+        let metadata = std::fs::metadata(file_path).map_err(|e| e.to_string())?;
+        let action = cloud_scan_action(
+            t_utils::is_cloud_only(&metadata),
+            existing_file.as_ref(),
+            metadata.len() as i64,
+            t_utils::systemtime_to_timestamp(metadata.modified().ok()),
+        );
+        let existing_id = existing_file.as_ref().and_then(|file| file.id);
+        match action {
+            CloudScanAction::Read => {}
+            CloudScanAction::ReadPending => {
+                let file_id = existing_id.ok_or("Existing DB record is missing file id")?;
+                let mut file = Self::update_file_info(file_id, file_path, last_scan_time)?
+                    .ok_or("File not found")?;
+                // Whatever was cached while the file was online-only may be stale.
+                let _ = AThumb::delete(file_id);
+                open_conn()?.execute(
+                    "UPDATE afiles SET embeds = NULL, cloud_only = 0, metadata_pending = 0 WHERE id = ?1",
+                    params![file_id],
+                ).map_err(|e| e.to_string())?;
+                file.has_thumbnail = Some(false);
+                file.has_embedding = Some(false);
+                file.cloud_only = false;
+                file.metadata_pending = false;
+                return Ok((file, 2));
+            }
+            CloudScanAction::InsertStub => {
+                if Self::cloud_stub(folder_id, file_path, file_type, last_scan_time)?.insert()? == 0 {
+                    // Lost an insert race; see the comment on the regular insert below.
+                    return Self::add_to_db(folder_id, file_path, file_type, last_scan_time);
+                }
+                return Self::fetch(folder_id, file_path)?
+                    .map(|file| (file, 1))
+                    .ok_or_else(|| format!("Inserted file missing from DB: {}", file_path));
+            }
+            CloudScanAction::MarkSeen => {
+                let file_id = existing_id.ok_or("Existing DB record is missing file id")?;
+                open_conn()?.execute(
+                    "UPDATE afiles SET last_scan_time = ?1, cloud_only = 1 WHERE id = ?2",
+                    params![last_scan_time, file_id],
+                ).map_err(|e| e.to_string())?;
+                let file = existing_file.ok_or("File not found")?;
+                return Ok((Self { cloud_only: true, last_scan_time: Some(last_scan_time), ..file }, 0));
+            }
+            CloudScanAction::UpdateStat => {
+                let file_id = existing_id.ok_or("Existing DB record is missing file id")?;
+                let info = t_utils::FileInfo::new(file_path)?;
+                open_conn()?.execute(
+                    "UPDATE afiles SET size = ?1, created_at = ?2, modified_at = ?3, last_scan_time = ?4,
+                     cloud_only = 1, metadata_pending = 1 WHERE id = ?5",
+                    params![info.file_size, info.created, info.modified, last_scan_time, file_id],
+                ).map_err(|e| e.to_string())?;
+                let file = existing_file.ok_or("File not found")?;
+                // Status 0: keep the old thumbnail ([M1]); status 2 would invalidate it.
+                return Ok((Self {
+                    size: info.file_size, created_at: info.created, modified_at: info.modified,
+                    last_scan_time: Some(last_scan_time), cloud_only: true, metadata_pending: true, ..file
+                }, 0));
+            }
+        }
         if let Some(mut file) = existing_file {
+            // The user brought the file back ("Always keep on this device").
+            if file.cloud_only {
+                if let Some(id) = file.id { Self::update_column(id, "cloud_only", &false)?; }
+                file.cloud_only = false;
+            }
             // check file modified time or if thumbnail is missing
             let file_info = t_utils::FileInfo::new(file_path)?;
             // Re-read legacy ISO dates using source-aware timezone handling.
@@ -10593,4 +10720,29 @@ mod smart_folder_name_tests {
         }
     }
 
+}
+
+#[cfg(test)]
+mod cloud_scan_tests {
+    use super::*;
+
+    fn stored(size: i64, modified: i64, pending: bool) -> AFile {
+        AFile { size, modified_at: Some(modified), metadata_pending: pending, ..Default::default() }
+    }
+
+    #[test]
+    fn online_only_files_are_never_read() {
+        assert_eq!(cloud_scan_action(true, None, 10, Some(1)), CloudScanAction::InsertStub);
+        assert_eq!(cloud_scan_action(true, Some(&stored(10, 1, false)), 10, Some(1)), CloudScanAction::MarkSeen);
+        assert_eq!(cloud_scan_action(true, Some(&stored(10, 1, true)), 10, Some(1)), CloudScanAction::MarkSeen);
+        assert_eq!(cloud_scan_action(true, Some(&stored(10, 1, false)), 11, Some(1)), CloudScanAction::UpdateStat);
+        assert_eq!(cloud_scan_action(true, Some(&stored(10, 1, false)), 10, Some(2)), CloudScanAction::UpdateStat);
+    }
+
+    #[test]
+    fn local_files_are_read_and_pending_ones_in_full() {
+        assert_eq!(cloud_scan_action(false, None, 10, Some(1)), CloudScanAction::Read);
+        assert_eq!(cloud_scan_action(false, Some(&stored(10, 1, false)), 10, Some(1)), CloudScanAction::Read);
+        assert_eq!(cloud_scan_action(false, Some(&stored(10, 1, true)), 10, Some(1)), CloudScanAction::ReadPending);
+    }
 }
