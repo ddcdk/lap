@@ -499,6 +499,52 @@ pub fn is_cloud_only(_metadata: &std::fs::Metadata) -> bool {
     false
 }
 
+/// True when reading the file's content cannot trigger a cloud download.
+/// Reads the live attributes, never the catalog's stored state.
+pub fn content_readable(path: &str) -> bool {
+    std::fs::metadata(path).is_ok_and(|m| m.is_file() && !is_cloud_only(&m))
+}
+
+/// True for an existing cloud-only file (live attributes).
+pub fn is_cloud_only_path(path: &str) -> bool {
+    std::fs::metadata(path).is_ok_and(|m| is_cloud_only(&m))
+}
+
+#[cfg(target_os = "windows")]
+const FILE_ATTRIBUTE_PINNED: u32 = 0x8_0000;
+#[cfg(target_os = "windows")]
+const FILE_ATTRIBUTE_UNPINNED: u32 = 0x10_0000;
+
+/// Attributes that ask OneDrive to free the local copy, like `attrib +U -P`.
+/// Keeps only the bits SetFileAttributesW accepts.
+#[cfg(target_os = "windows")]
+fn unpinned_attributes(attributes: u32) -> u32 {
+    // READONLY, HIDDEN, SYSTEM, ARCHIVE, NORMAL, TEMPORARY, OFFLINE, NOT_CONTENT_INDEXED, NO_SCRUB_DATA
+    const SETTABLE: u32 = 0x1 | 0x2 | 0x4 | 0x20 | 0x80 | 0x100 | 0x1000 | 0x2000 | 0x2_0000;
+    (attributes & SETTABLE) | FILE_ATTRIBUTE_UNPINNED
+}
+
+/// Ask OneDrive to free the local copy. A file the user keeps on this device stays local.
+#[cfg(target_os = "windows")]
+pub fn release_cloud_file(path: &str) -> Result<bool, String> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::fs::MetadataExt;
+    let attributes = std::fs::metadata(path).map_err(|e| e.to_string())?.file_attributes();
+    if attributes & FILE_ATTRIBUTE_PINNED != 0 {
+        return Ok(false);
+    }
+    let wide: Vec<u16> = std::ffi::OsStr::new(path).encode_wide().chain(std::iter::once(0)).collect();
+    if unsafe { win32_imports::SetFileAttributesW(wide.as_ptr(), unpinned_attributes(attributes)) } == 0 {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    Ok(true)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn release_cloud_file(_path: &str) -> Result<bool, String> {
+    Err("Freeing up space is only supported on Windows".to_string())
+}
+
 pub fn is_hidden(entry: &walkdir::DirEntry) -> bool {
     is_dotfile(entry.file_name())
         || entry
@@ -662,6 +708,8 @@ mod win32_imports {
         ) -> i32;
 
         pub fn CloseHandle(hObject: HANDLE) -> i32;
+
+        pub fn SetFileAttributesW(lpFileName: *const u16, dwFileAttributes: u32) -> i32;
     }
 }
 
@@ -4542,13 +4590,52 @@ mod cloud_only_tests {
         fs::remove_file(path).unwrap();
     }
 
+    #[test]
+    fn content_readable_needs_an_existing_local_file() {
+        let path = std::env::temp_dir().join(format!("lap-readable-{}", uuid::Uuid::new_v4()));
+        let path_str = path.to_str().unwrap().to_string();
+        assert!(!content_readable(&path_str));
+        fs::write(&path, b"local").unwrap();
+        assert!(content_readable(&path_str));
+        assert!(!is_cloud_only_path(&path_str));
+        fs::remove_file(path).unwrap();
+    }
+
     /// Set LAP_CLOUD_ONLY_FILE to a Windows/macOS cloud-only file to run this check.
     #[test]
     fn cloud_only_sample_is_detected() {
         let Ok(path) = std::env::var("LAP_CLOUD_ONLY_FILE") else { return };
         assert!(is_cloud_only(&fs::metadata(&path).unwrap()));
         assert!(file_accessible(&path));
-        assert!(is_cloud_only(&fs::metadata(&path).unwrap()), "the accessibility check downloaded the file");
+        assert!(!content_readable(&path));
+        assert!(is_cloud_only_path(&path));
+        FileInfo::new(&path).unwrap();
+        assert!(is_cloud_only(&fs::metadata(&path).unwrap()), "an accessibility or metadata check downloaded the file");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn unpinned_attributes_keeps_only_settable_bits() {
+        // archive + pinned + recall-on-data-access + reparse point
+        assert_eq!(unpinned_attributes(0x20 | 0x8_0000 | 0x40_0000 | 0x400), 0x20 | 0x10_0000);
+    }
+
+    /// Set LAP_CLOUD_ROUNDTRIP_FILE to an online-only OneDrive file the test may download and free again.
+    /// With Windows "Controlled folder access" on, run the test binary from a path the user allowed.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn cloud_file_roundtrip_downloads_then_frees() {
+        let Ok(path) = std::env::var("LAP_CLOUD_ROUNDTRIP_FILE") else { return };
+        assert!(is_cloud_only(&fs::metadata(&path).unwrap()), "start from an online-only file");
+        fs::read(&path).unwrap();
+        assert!(content_readable(&path));
+        assert_eq!(release_cloud_file(&path), Ok(true));
+        // OneDrive frees the local copy asynchronously.
+        let freed = (0..60).any(|_| {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            is_cloud_only(&fs::metadata(&path).unwrap())
+        });
+        assert!(freed, "OneDrive did not free the file within 30 s");
     }
 }
 
