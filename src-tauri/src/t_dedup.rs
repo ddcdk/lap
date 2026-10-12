@@ -206,6 +206,9 @@ fn scan_and_hash_files(
             if let Some(path) = &file.file_path {
                 if crate::t_utils::is_cloud_only_path(path) {
                     // Hashing reads the whole file; Lap must not trigger a download.
+                    // A hash from before a remote change would still group the file as a duplicate.
+                    tx.execute("DELETE FROM file_hashes WHERE file_id = ?1", params![file.id.unwrap()])
+                        .map_err(|e| e.to_string())?;
                     skipped += 1;
                 } else {
                 match compute_blake3_hash(path) {

@@ -244,6 +244,7 @@ import { isWebViewVideoPlaybackDisabled, getGStreamerAvailability } from '@/comm
 import { claimHoverPreview, releaseHoverPreview } from '@/common/hoverPreview';
 import ContextMenu from '@/components/ContextMenu.vue';
 import { isOriginalUnavailable } from '@/common/availability';
+import { isCloudOnlyFile } from '@/common/api';
 import { useFileMenuItems } from '@/common/fileMenu';
 
 import { 
@@ -453,6 +454,8 @@ function startVideoPreview() {
     const available = await getGStreamerAvailability();
     if (request !== videoPreviewRequest || !available) return;
     if (!canPreviewVideo.value || !previewVideoPath.value) return;
+    // The catalog flag can be stale; playing an online-only video would download it.
+    if (await isCloudOnlyFile(previewVideoPath.value) || request !== videoPreviewRequest) return;
 
     isVideoPreviewReady.value = false;
     showVideoPreview.value = true;
@@ -493,9 +496,11 @@ function stopVideoPreview() {
 function startAnimatedImagePreview() {
   if (!canPreviewAnimatedImage.value || animatedImagePreviewTimer || showAnimatedImagePreview.value) return;
 
-  animatedImagePreviewTimer = setTimeout(() => {
+  animatedImagePreviewTimer = setTimeout(async () => {
     animatedImagePreviewTimer = null;
     if (!canPreviewAnimatedImage.value) return;
+    // The catalog flag can be stale; loading an online-only image would download it.
+    if (await isCloudOnlyFile(props.file?.file_path || '') || !canPreviewAnimatedImage.value) return;
     isAnimatedImagePreviewReady.value = false;
     showAnimatedImagePreview.value = true;
   }, 400);

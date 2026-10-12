@@ -2977,6 +2977,14 @@ pub fn check_file_exists(file_path: &str) -> bool {
     Path::new(file_path).exists()
 }
 
+/// Live cloud-only check (the catalog's flag can be stale); reads attributes only.
+#[tauri::command]
+pub async fn is_cloud_only_file(file_path: String) -> bool {
+    tauri::async_runtime::spawn_blocking(move || t_utils::is_cloud_only_path(&file_path))
+        .await
+        .unwrap_or(false)
+}
+
 /// Check readability without decoding or modifying the original.
 #[tauri::command]
 pub async fn check_file_accessibility(file_path: String) -> bool {

@@ -4456,6 +4456,10 @@ impl AFile {
             {
                 let file_path = PathBuf::from(&folder_path).join(&candidate.name);
                 let file_path = file_path.to_string_lossy();
+                // Probing an online-only video would download it; it is probed once local.
+                if !t_utils::content_readable(&file_path) {
+                    continue;
+                }
                 let identifier = t_video::get_video_metadata(&file_path)
                     .ok()
                     .and_then(|metadata| metadata.content_identifier)
@@ -4499,6 +4503,10 @@ impl AFile {
 
             let file_path = PathBuf::from(&folder_path).join(&image.name);
             let file_path = file_path.to_string_lossy();
+            // Reading an online-only image would download it; filename pairing still applies.
+            if !t_utils::content_readable(&file_path) {
+                continue;
+            }
             let identifier = crate::t_apple_sidecar::scan_apple_content_identifiers(&file_path)
                 .into_iter()
                 .map(|identifier| identifier.to_ascii_lowercase())
@@ -7785,6 +7793,16 @@ impl AThumb {
         )
     }
 
+    /// Cached thumbnail of an online-only file, served without touching the original:
+    /// staleness checks would delete it, and a small image (error_code 2) is shown from its original.
+    fn cloud_only_cached(thumbnail: Self, file_path: &str, thumbnail_size: u32, orientation: i32) -> Result<Option<Self>, String> {
+        if thumbnail.error_code == 2 {
+            // Not persisted: the grid shows its placeholder until the file is local again.
+            return Ok(Some(Self { error_code: 1, ..thumbnail }));
+        }
+        Self::ensure_cached(thumbnail, file_path, thumbnail_size, orientation).map(Some)
+    }
+
     pub fn get_thumb_if_available(
         file_id: i64,
         file_path: &str,
@@ -7804,6 +7822,9 @@ impl AThumb {
         }
 
         if let Ok(Some(thumbnail)) = Self::fetch(file_id) {
+            if t_utils::is_cloud_only_path(file_path) {
+                return Self::cloud_only_cached(thumbnail, file_path, thumbnail_size, orientation);
+            }
             if thumbnail.raw_display_is_stale(file_path, orientation, prefer_embedded_raw_thumbnail) {
                 let _ = Self::delete(file_id);
                 return Ok(None);
@@ -7853,6 +7874,10 @@ impl AThumb {
         if force_regenerate {
             let _ = Self::delete(thumbnail.file_id);
             return Ok(None);
+        }
+
+        if t_utils::is_cloud_only_path(file_path) {
+            return Self::cloud_only_cached(thumbnail, file_path, thumbnail_size, orientation);
         }
 
         if thumbnail.raw_display_is_stale(file_path, orientation, prefer_embedded_raw_thumbnail) {
@@ -10606,6 +10631,24 @@ mod raw_display_cache_tests {
         ).unwrap().unwrap();
         assert_eq!(retained.thumb_data, Some(vec![1, 2, 3]));
         assert!(crate::t_utils::is_cloud_only_path(&path), "the thumbnail check downloaded the file");
+    }
+
+    /// Set LAP_CLOUD_ONLY_FILE to run: an online-only file keeps its thumbnail even when its date
+    /// changed remotely, and a small image is not served from its original.
+    #[test]
+    fn online_only_thumbnail_skips_staleness_and_original_display() {
+        let Ok(path) = std::env::var("LAP_CLOUD_ONLY_FILE") else { return };
+        // file_id -1: nothing to delete in the real catalog if the guard is missing.
+        let thumb = |error_code| AThumb {
+            id: Some(1), file_id: -1, error_code, thumb_data: None, thumb_key: None,
+            thumb_mtime: Some(123), thumb_size: Some(256), updated_at: Some(123), thumb_data_base64: None,
+        };
+        let resolve = |t| AThumb::resolve_fetched_thumb_if_available(
+            t, &path, 512, 1, RawDisplayOptions::default(), false, false, true,
+        ).unwrap();
+        assert_eq!(resolve(thumb(0)).map(|t| t.error_code), Some(0), "a stale-dated cached thumbnail was dropped");
+        assert_eq!(resolve(thumb(2)).map(|t| t.error_code), Some(1), "a small image would be shown from its original");
+        assert!(crate::t_utils::is_cloud_only_path(&path));
     }
 
     #[test]
