@@ -7766,6 +7766,11 @@ async function updateContent(force = false, preserveMultiSelection = selectMode.
   // Increment request ID to cancel any previous thumbnail generation and reset queue
   currentThumbRequestId++;
   const requestId = ++currentContentRequestId;
+  // Leaving the folder view re-arms its sync, so coming back picks up changes that
+  // leave the folder mtime untouched (e.g. OneDrive "Free up space").
+  if (newIndex !== SIDEBAR.ALBUM || !libConfig.album.id || libConfig.album.selected) {
+    lastSyncedAlbumFolder = '';
+  }
 
   contentReady.value = false;
   contentCountIsAuthoritative.value = false;
