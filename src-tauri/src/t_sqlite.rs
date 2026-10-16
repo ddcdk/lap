@@ -2299,8 +2299,9 @@ impl AFile {
     pub fn update_path(file_id: i64, file_path: &str, last_scan_time: i64) -> Result<Option<Self>, String> {
         let name = t_utils::get_file_name(file_path);
         open_conn()?.execute(
-            "UPDATE afiles SET name = ?1, name_pinyin = ?2, last_scan_time = ?3, cloud_only = 1 WHERE id = ?4",
-            params![name, t_utils::natural_sort_key(&name.to_lowercase()), last_scan_time, file_id],
+            "UPDATE afiles SET name = ?1, name_pinyin = ?2, last_scan_time = ?3, cloud_only = ?4 WHERE id = ?5",
+            // A file that vanished since the walk is not online-only.
+            params![name, t_utils::natural_sort_key(&name.to_lowercase()), last_scan_time, t_utils::is_cloud_only_path(file_path), file_id],
         ).map_err(|e| e.to_string())?;
         Self::get_file_info(file_id)
     }
