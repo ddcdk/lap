@@ -1579,8 +1579,6 @@ pub struct AFile {
     pub cloud_only: bool, // online-only placeholder when last scanned
     #[serde(default)]
     pub metadata_pending: bool, // indexed without reading the content
-    #[serde(default)]
-    pub live_photo_video_cloud_only: bool, // output-only: paired Live Photo video is online-only
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -2747,7 +2745,6 @@ impl AFile {
             album_visible: true,
             cloud_only: false,
             metadata_pending: false,
-            live_photo_video_cloud_only: false,
         };
 
         Ok(file)
@@ -3290,8 +3287,7 @@ impl AFile {
                 a.motion_photo_offset,
                 {} AS album_visible,
                 a.cloud_only,
-                a.metadata_pending,
-                COALESCE(lpv.cloud_only, 0) AS live_photo_video_cloud_only
+                a.metadata_pending
             FROM afiles a
             LEFT JOIN afolders b ON a.folder_id = b.id
             LEFT JOIN albums c ON b.album_id = c.id
@@ -3374,7 +3370,6 @@ impl AFile {
             album_visible: row.get(56)?,
             cloud_only: row.get(57)?,
             metadata_pending: row.get(58)?,
-            live_photo_video_cloud_only: row.get(59)?,
         })
     }
 
@@ -6554,6 +6549,49 @@ impl AFile {
         Self::query_files(&sql, &[&folder_id])
     }
 
+    /// Recheck only the opened folder; avoid loading full catalog records or
+    /// scanning every file in the library during background mtime synchronization.
+    pub fn refresh_cloud_state(folder_id: i64, folder_path: &str) -> Result<(bool, bool), String> {
+        if !cfg!(any(target_os = "windows", target_os = "macos")) {
+            return Ok((false, false));
+        }
+        let mut conn = open_conn()?;
+        Self::refresh_cloud_state_on(&mut conn, folder_id, Path::new(folder_path))
+    }
+
+    fn refresh_cloud_state_on(conn: &mut Connection, folder_id: i64, folder_path: &Path) -> Result<(bool, bool), String> {
+        let mut changed = Vec::new();
+        let mut needs_indexing = false;
+        {
+            let mut stmt = conn.prepare(
+                "SELECT id, name, cloud_only, metadata_pending FROM afiles WHERE folder_id = ?1",
+            ).map_err(|e| e.to_string())?;
+            let files = stmt.query_map([folder_id], |row| Ok((
+                row.get::<_, i64>(0)?, row.get::<_, String>(1)?,
+                row.get::<_, bool>(2)?, row.get::<_, bool>(3)?,
+            ))).map_err(|e| e.to_string())?;
+            for file in files {
+                let (id, name, was_cloud_only, pending) = file.map_err(|e| e.to_string())?;
+                let Ok(metadata) = fs::metadata(folder_path.join(name)) else { continue };
+                let cloud_only = t_utils::is_cloud_only(&metadata);
+                needs_indexing |= !cloud_only && (was_cloud_only || pending);
+                if cloud_only != was_cloud_only { changed.push((id, cloud_only)); }
+            }
+        }
+        if !changed.is_empty() {
+            let tx = conn.transaction().map_err(|e| e.to_string())?;
+            {
+                let mut update = tx.prepare("UPDATE afiles SET cloud_only = ?1 WHERE id = ?2")
+                    .map_err(|e| e.to_string())?;
+                for (id, cloud_only) in &changed {
+                    update.execute(params![cloud_only, id]).map_err(|e| e.to_string())?;
+                }
+            }
+            tx.commit().map_err(|e| e.to_string())?;
+        }
+        Ok((!changed.is_empty(), needs_indexing))
+    }
+
     // --- AI Logic ---
 
     /// check ai status
@@ -6620,10 +6658,15 @@ impl AFile {
         // 4. Generate embedding
         let mut engine = state.0.lock().unwrap();
 
+        let encode_original = |engine: &mut t_ai::AiEngine| {
+            if !t_utils::content_readable(&file_path) {
+                return Err("Skipped: the original is not local".to_string());
+            }
+            engine.encode_image(&file_path)
+        };
+
         // Optimized: Use thumbnail if available (much faster than loading original)
         // Fallback to original file if thumbnail is missing or fails to process
-        // ponytail: a corrupt stored thumbnail still falls back to the original, which downloads an
-        // online-only file; add the online-only check here too if that is ever observed.
         let embedding = match thumb {
             Ok(Some(thumb)) if thumb.thumb_data.is_some() => {
                 let thumb_bytes = thumb.thumb_data.as_ref().unwrap();
@@ -6633,7 +6676,7 @@ impl AFile {
                     Ok(res) => res.or_else(|_| {
                         // If thumbnail processing fails (e.g. corrupted), try original
                         match panic::catch_unwind(AssertUnwindSafe(|| {
-                            engine.encode_image(&file_path)
+                            encode_original(&mut engine)
                         })) {
                             Ok(res2) => res2,
                             Err(_) => Err(format!(
@@ -6644,7 +6687,7 @@ impl AFile {
                     }),
                     // If thumbnail path panics, still try original once.
                     Err(_) => match panic::catch_unwind(AssertUnwindSafe(|| {
-                        engine.encode_image(&file_path)
+                        encode_original(&mut engine)
                     })) {
                         Ok(res2) => res2,
                         Err(_) => Err(format!(
@@ -6654,7 +6697,7 @@ impl AFile {
                     },
                 }
             }
-            _ => match panic::catch_unwind(AssertUnwindSafe(|| engine.encode_image(&file_path))) {
+            _ => match panic::catch_unwind(AssertUnwindSafe(|| encode_original(&mut engine))) {
                 Ok(res) => res,
                 Err(_) => Err(format!(
                     "Embedding panic while encoding original image: {}",
@@ -7277,6 +7320,9 @@ impl AThumb {
         known_duration: Option<u64>,
         seek_percent: Option<u8>,
     ) -> Result<Option<Self>, String> {
+        if !t_utils::content_readable(file_path) {
+            return Self::fetch_for_library(file_id, library_id);
+        }
         if file_type == 3 {
             if let Some(companion) = crate::t_raw_display::paired_file(file_id, prefer_embedded_raw_thumbnail) {
                 if let (Some(companion_id), Some(path)) = (companion.id, companion.file_path.as_deref()) {
@@ -7710,12 +7756,13 @@ impl AThumb {
         library_id: &str,
         known_duration: Option<u64>,
         seek_percent: Option<u8>,
+        require_cached_bytes: bool,
     ) -> Result<Option<Self>, String> {
         // Reading an online-only original would download it; keep whatever is cached.
         if t_utils::is_cloud_only_path(file_path) {
             return Self::fetch_for_library(file_id, library_id);
         }
-        if Self::should_use_original_image(file_id, file_type, thumbnail_size) {
+        if !require_cached_bytes && Self::should_use_original_image(file_id, file_type, thumbnail_size) {
             let athumb = Self {
                 id: None,
                 file_id,
@@ -7791,6 +7838,24 @@ impl AThumb {
             &library_id,
             known_duration,
             seek_percent,
+            false,
+        )
+    }
+
+    /// Explicit download/index operation: always persist bytes, even for small images.
+    pub fn cache_cloud_file_thumbnail(
+        file_id: i64,
+        file_path: &str,
+        file_type: i64,
+        orientation: i32,
+        thumbnail_size: u32,
+        options: RawDisplayOptions,
+        known_duration: Option<u64>,
+    ) -> Result<Option<Self>, String> {
+        let _generation_guard = Self::acquire_generation_guard(file_id, thumbnail_size);
+        Self::create_cache_backed_thumb_for_library(
+            file_id, file_path, file_type, orientation, thumbnail_size, options,
+            &Self::get_current_library_id(), known_duration, None, true,
         )
     }
 
@@ -8098,6 +8163,7 @@ impl AThumb {
                 library_id,
                 file.duration.map(|d| d as u64),
                 None,
+                true,
             )?
             .and_then(|thumb| thumb.thumb_data));
         }
@@ -8870,6 +8936,7 @@ impl Person {
 
         // Helper to load and rotate original image
         let load_original = || -> Option<(image::DynamicImage, u32, u32)> {
+            if !t_utils::content_readable(&full_path.to_string_lossy()) { return None; }
             let mut dyn_img = image::open(&full_path).ok()?;
             dyn_img = match orientation {
                 3 => dyn_img.rotate180(),
@@ -10821,4 +10888,29 @@ mod cloud_scan_tests {
         assert_eq!(cloud_scan_action(false, Some(&stored(10, 1, false)), 10, Some(1)), CloudScanAction::Read);
         assert_eq!(cloud_scan_action(false, Some(&stored(10, 1, true)), 10, Some(1)), CloudScanAction::ReadPending);
     }
+    #[test]
+    fn cloud_state_refresh_preserves_pending_work_and_ignores_missing_or_unrelated_files() {
+        let root = std::env::temp_dir().join(format!("lap-cloud-state-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("local.jpg"), b"metadata check only").unwrap();
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE afiles(id INTEGER PRIMARY KEY, folder_id INTEGER, name TEXT,
+            cloud_only INTEGER, metadata_pending INTEGER);
+            INSERT INTO afiles VALUES (1,1,'local.jpg',1,1), (2,1,'missing.jpg',1,1),
+                                      (3,2,'local.jpg',1,1);").unwrap();
+        assert_eq!(AFile::refresh_cloud_state_on(&mut conn, 1, &root).unwrap(), (true, true));
+        let states: Vec<(i64, bool, bool)> = conn.prepare(
+            "SELECT id, cloud_only, metadata_pending FROM afiles ORDER BY id"
+        ).unwrap().query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap().collect::<Result<_, _>>().unwrap();
+        assert_eq!(states, vec![(1,false,true), (2,true,true), (3,true,true)]);
+        // The flag update must not consume pending work if indexing is interrupted.
+        assert_eq!(AFile::refresh_cloud_state_on(&mut conn, 1, &root).unwrap(), (false, true));
+        conn.execute("UPDATE afiles SET metadata_pending = 0 WHERE id = 1", []).unwrap();
+        let writes = conn.total_changes();
+        assert_eq!(AFile::refresh_cloud_state_on(&mut conn, 1, &root).unwrap(), (false, false));
+        assert_eq!(conn.total_changes(), writes, "unchanged folders must not write to the DB");
+        fs::remove_dir_all(root).unwrap();
+    }
+
 }

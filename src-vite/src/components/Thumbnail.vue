@@ -331,8 +331,8 @@ const canPreviewVideo = computed(() => (
   !originalUnavailable.value && (isVideoFile.value || isLivePhoto.value)
   && !!previewVideoPath.value
   && !isWebViewVideoPlaybackDisabled(previewVideoPath.value)
-  // Playing an online-only video would download it.
-  && !(isLivePhoto.value ? props.file.live_photo_video_cloud_only : props.file.cloud_only)
+  // The companion video is checked live before playback.
+  && (isLivePhoto.value || !props.file.cloud_only)
 ));
 const ANIMATABLE_IMAGE_EXTENSIONS = new Set(['gif', 'png', 'apng', 'webp', 'avif']);
 const isAnimatableImageFile = computed(() => ANIMATABLE_IMAGE_EXTENSIONS.has(
@@ -493,20 +493,27 @@ function stopVideoPreview() {
   showVideoPreview.value = false;
 }
 
+let animatedImagePreviewRequest = 0;
+
 function startAnimatedImagePreview() {
   if (!canPreviewAnimatedImage.value || animatedImagePreviewTimer || showAnimatedImagePreview.value) return;
 
+  const request = ++animatedImagePreviewRequest;
+  const filePath = props.file?.file_path || '';
   animatedImagePreviewTimer = setTimeout(async () => {
     animatedImagePreviewTimer = null;
     if (!canPreviewAnimatedImage.value) return;
     // The catalog flag can be stale; loading an online-only image would download it.
-    if (await isCloudOnlyFile(props.file?.file_path || '') || !canPreviewAnimatedImage.value) return;
+    if (await isCloudOnlyFile(filePath)) return;
+    if (request !== animatedImagePreviewRequest || props.file?.file_path !== filePath
+      || !canPreviewAnimatedImage.value) return;
     isAnimatedImagePreviewReady.value = false;
     showAnimatedImagePreview.value = true;
   }, 400);
 }
 
 function stopAnimatedImagePreview() {
+  animatedImagePreviewRequest++;
   if (animatedImagePreviewTimer) {
     clearTimeout(animatedImagePreviewTimer);
     animatedImagePreviewTimer = null;

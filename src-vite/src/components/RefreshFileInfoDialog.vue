@@ -13,9 +13,10 @@
           <span :class="{ 'text-error/70': failed > 0 }">{{ $t('msgbox.file_refresh.failed', { count: failed.toLocaleString() }) }}</span>
         </div>
         <div v-if="freeSpace" class="flex gap-3 text-base-content/60">
-          <span>{{ $t('msgbox.file_refresh.released', { count: released.toLocaleString() }) }}</span>
+          <span>{{ $t('msgbox.file_refresh.release_requested', { count: releaseRequested.toLocaleString() }) }}</span>
           <span :title="$t('msgbox.file_refresh.kept_local_hint')">{{ $t('msgbox.file_refresh.kept_local', { count: keptLocal.toLocaleString() }) }}</span>
         </div>
+        <p v-if="lastError" class="text-error/70 break-words" role="alert">{{ lastError }}</p>
       </div>
     </section>
     <div class="mt-4 flex justify-end gap-4">
@@ -34,7 +35,7 @@ import { getRawDisplayOptions } from '@/common/rawDisplay';
 import { useUIStore } from '@/stores/uiStore';
 import ModalDialog from '@/components/ModalDialog.vue';
 
-type FileRefreshResult = { file: any; size_delta: number; skipped: boolean; released: boolean };
+type FileRefreshResult = { file: any; size_delta: number; skipped: boolean; release_requested: boolean; error?: string | null };
 const props = defineProps<{ fileIds: number[]; libraryId: string; freeSpace?: boolean; finishRefresh: (results: FileRefreshResult[]) => Promise<void> }>();
 const emit = defineEmits(['close']);
 const uiStore = useUIStore();
@@ -43,7 +44,8 @@ const cancelled = ref(false);
 const processed = ref(0);
 const succeeded = ref(0);
 const failed = ref(0);
-const released = ref(0);
+const releaseRequested = ref(0);
+const lastError = ref('');
 const keptLocal = ref(0);
 let disposed = false;
 
@@ -79,14 +81,18 @@ onMounted(async () => {
               thumbnailSize: config.settings.thumbnailSize, rawDisplayOptions: getRawDisplayOptions(),
             })
           : await invoke<FileRefreshResult | null>('refresh_selected_file_info', { libraryId: props.libraryId, fileId });
-        if (result && props.freeSpace) result.released ? released.value++ : keptLocal.value++;
+        if (result && props.freeSpace) result.release_requested ? releaseRequested.value++ : keptLocal.value++;
         if (result) {
           results.push(result);
-          succeeded.value++;
+          if (result.error) {
+            failed.value++;
+            lastError.value = result.error;
+          } else succeeded.value++;
         }
         else failed.value++;
       } catch (error) {
         console.error('Failed to refresh selected file:', fileId, error);
+        lastError.value = String(error);
         failed.value++;
       }
       processed.value++;

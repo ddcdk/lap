@@ -2780,23 +2780,7 @@ fn reconcile_raw_jpeg_pairs_after_album_index(
     Ok(())
 }
 
-/// Sync a single folder when its directory mtime has changed.
-/// Returns counts and schedules thumbnail/embedding generation.
-/// Track "Free up space" / "Always keep on this device", which leave the folder mtime unchanged.
-fn refresh_cloud_only_flags(folder_id: i64) -> Result<bool, String> {
-    let mut changed = false;
-    for file in AFile::get_files_by_folder_id(folder_id)? {
-        let (Some(id), Some(path)) = (file.id, file.file_path.as_deref()) else { continue };
-        let Ok(metadata) = fs::metadata(path) else { continue };
-        let cloud_only = is_cloud_only(&metadata);
-        if cloud_only != file.cloud_only {
-            AFile::update_column(id, "cloud_only", &cloud_only)?;
-            changed = true;
-        }
-    }
-    Ok(changed)
-}
-
+/// Sync the opened folder, including cloud state changes that leave its mtime unchanged.
 pub fn sync_single_folder(
     app_handle: &tauri::AppHandle,
     album_id: i64,
@@ -2872,8 +2856,12 @@ pub fn sync_single_folder(
         FolderScanState::LIVE_PHOTO_PAIRING,
         FolderScanState::LIVE_PHOTO_PAIRING_VERSION,
     )?;
-    if info.modified == folder.modified_at && !needs_live_photo_reindex {
-        let cloud_flags_changed = refresh_cloud_only_flags(resolved_folder_id)?;
+    let (cloud_flags_changed, needs_cloud_indexing) = if info.modified == folder.modified_at && !needs_live_photo_reindex {
+        AFile::refresh_cloud_state(resolved_folder_id, folder_path)?
+    } else {
+        (false, false)
+    };
+    if info.modified == folder.modified_at && !needs_live_photo_reindex && !needs_cloud_indexing {
         // An unchanged mtime-driven sync still reconciles the existing pair state.
         // This is intentionally the only incremental path that receives the
         // setting; changing Settings alone does not mutate the database.
@@ -2986,7 +2974,7 @@ pub fn refresh_album_subfolders(
 }
 
 fn should_process_synced_file(file: &AFile, file_type: i64, threshold: i64) -> bool {
-    if !file.album_visible || dimensions_excluded(file_type, file.width.unwrap_or(0), file.height.unwrap_or(0), threshold) { return false; }
+    if file.cloud_only || !file.album_visible || dimensions_excluded(file_type, file.width.unwrap_or(0), file.height.unwrap_or(0), threshold) { return false; }
     if !file.has_thumbnail.unwrap_or(false) {
         return true;
     }
@@ -3923,7 +3911,7 @@ fn index_single_file(
                             _ => false,
                         };
 
-                        let task = if fully_indexed {
+                        let task = if fully_indexed || file.cloud_only {
                             None
                         } else {
                             Some(ThumbnailTask {

@@ -2868,14 +2868,16 @@ pub fn update_file_info(file_id: i64, file_path: &str) -> Result<Option<AFile>, 
         .map_err(|e| format!("Error while updating file info: {}", e))
 }
 
-#[derive(serde::Serialize)]
+#[derive(Default, serde::Serialize)]
 pub struct FileRefreshResult {
     file: AFile,
     size_delta: i64,
     /// True when the file was left unread because it is an unchanged cloud-only file.
     skipped: bool,
-    /// True when OneDrive was asked to free the file again (index_cloud_file only).
-    released: bool,
+    /// The provider accepted an asynchronous release request.
+    release_requested: bool,
+    /// A later stage failed after metadata was already updated.
+    error: Option<String>,
 }
 
 /// Re-read a file's metadata. Without `force`, an unchanged online-only file is left unread.
@@ -2889,14 +2891,11 @@ fn refresh_file(file_id: i64, force: bool) -> Result<Option<FileRefreshResult>, 
             && m.len() as i64 == old.size
             && t_utils::systemtime_to_timestamp(m.modified().ok()) == old.modified_at
     }) {
-        return Ok(Some(FileRefreshResult { file: old, size_delta: 0, skipped: true, released: false }));
+        return Ok(Some(FileRefreshResult { file: old, size_delta: 0, skipped: true, ..Default::default() }));
     }
     let updated = AFile::update_file_info(file_id, path, chrono::Utc::now().timestamp_millis())?;
-    // The read downloaded the file: it is local and fully read.
-    AFile::update_column(file_id, "cloud_only", &false)?;
-    AFile::update_column(file_id, "metadata_pending", &false)?;
     if let Some(ref file) = updated {
-        let content_changed = old.modified_at != file.modified_at || old.size != file.size;
+        let content_changed = old.metadata_pending || old.modified_at != file.modified_at || old.size != file.size;
         if content_changed || old.width != file.width || old.height != file.height
             || old.e_orientation != file.e_orientation {
             AThumb::delete(file_id)?;
@@ -2905,11 +2904,13 @@ fn refresh_file(file_id: i64, force: bool) -> Result<Option<FileRefreshResult>, 
             AFile::update_column(file_id, "embeds", &Option::<Vec<u8>>::None)?;
         }
     }
+    AFile::update_column(file_id, "cloud_only", &false)?;
+    AFile::update_column(file_id, "metadata_pending", &false)?;
     Ok(AFile::get_file_info(file_id)?.map(|file| FileRefreshResult {
         size_delta: file.size - old.size,
         file,
         skipped: false,
-        released: false,
+        ..Default::default()
     }))
 }
 
@@ -2946,16 +2947,32 @@ pub async fn index_cloud_file(
         if !was_cloud_only {
             return Ok(Some(result));
         }
-        let file = &result.file;
-        AThumb::get_or_create_thumb(
-            file_id, &path, file.file_type.unwrap_or(0), file.e_orientation.unwrap_or(1) as i32,
-            thumbnail_size, raw_display_options, true, file.duration.map(|d| d as u64), None,
-        )?;
-        // All handles are closed here; a pinned or protected file stays local.
-        result.released = t_utils::release_cloud_file(&path).unwrap_or(false);
-        AFile::update_column(file_id, "cloud_only", &result.released)?;
-        if let Some(file) = AFile::get_file_info(file_id)? {
-            result.file = file;
+        // Keep the refreshed file even if thumbnail generation or release fails.
+        let release = (|| -> Result<bool, String> {
+            let file = &result.file;
+            let thumb = AThumb::cache_cloud_file_thumbnail(
+                file_id, &path, file.file_type.unwrap_or(0), file.e_orientation.unwrap_or(1) as i32,
+                thumbnail_size, raw_display_options, file.duration.map(|d| d as u64),
+            )?;
+            if !matches!(thumb, Some(ref thumb) if thumb.error_code == 0 && thumb.thumb_data.is_some()) {
+                return Err("Thumbnail could not be cached; the file was kept on this device".to_string());
+            }
+            // Attribute changes request asynchronous dehydration, not completion.
+            t_utils::release_cloud_file(&path)
+        })();
+        match release {
+            Ok(requested) => result.release_requested = requested,
+            Err(error) => result.error = Some(error),
+        }
+        let cloud_only = t_utils::is_cloud_only_path(&path);
+        result.file.cloud_only = cloud_only;
+        if let Err(error) = AFile::update_column(file_id, "cloud_only", &cloud_only) {
+            result.error.get_or_insert(error);
+        }
+        match AFile::get_file_info(file_id) {
+            Ok(Some(file)) => result.file = file,
+            Ok(None) => { result.error.get_or_insert("File no longer exists in the catalog".to_string()); }
+            Err(error) => { result.error.get_or_insert(error); }
         }
         Ok(Some(result))
     }).await.map_err(|e| format!("Cloud file indexing task failed: {e}"))?

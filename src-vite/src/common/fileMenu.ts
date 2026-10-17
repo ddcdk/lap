@@ -113,7 +113,7 @@ export const useFileMenuItems = (
         action: createAction('refresh-file-info'),
       },
       {
-        label: localeMsg.value.menu.file.index_cloud_files,
+        label: menuLabel(['index_cloud_files', 'Download, index, then free up space']),
         icon: markRaw(IconCloud),
         // Freeing up space is a Windows (OneDrive) operation.
         hidden: !isWin,
